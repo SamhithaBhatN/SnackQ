@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="cart-section">
+    <h2 class="cart-title">Checkout</h2>
+
+    <div class="cart-container">
+
+        <div class="cart-items" id="checkoutItems"></div>
+
+        <div class="cart-summary">
+    <h3>Payment Method</h3>
+
+    <form method="POST" action="/place_order" onsubmit="return submitOrder()">
+
+        <div class="summary-row">
+            <input type="radio" name="payment" value="Cash" checked> Cash on Pickup
+        </div>
+
+        <input type="hidden" name="cartData" id="cartData">
+
+        <div class="summary-row total">
+            <span>Total</span>
+            <span id="checkoutTotal">₹0</span>
+        </div>
+
+        <button type="submit" class="checkout-btn">
+            Place Order
+        </button>
+    </form>
+</div>
+
+    </div>
+</section>
+
+<script>
+
+function loadCheckout() {
+    let cart = JSON.parse(localStorage.getItem("cart")) || [];
+    const container = document.getElementById("checkoutItems");
+    container.innerHTML = "";
+
+    let total = 0;
+
+    cart.forEach(item => {
+        total += item.price * item.quantity;
+
+        container.innerHTML += `
+        <div class="cart-item">
+            <img src="/static/images/${item.image}">
+            <div class="item-details">
+                <h3>${item.name}</h3>
+                <p>₹${item.price} × ${item.quantity}</p>
+            </div>
+            <div class="item-total">₹${item.price * item.quantity}</div>
+        </div>
+        `;
+    });
+
+    document.getElementById("checkoutTotal").innerText = "₹" + total;
+}
+
+function submitOrder() {
+    let cart = localStorage.getItem("cart");
+
+    if (!cart || JSON.parse(cart).length === 0) {
+        alert("Cart is empty!");
+        return false;
+    }
+
+    document.getElementById("cartData").value = cart;
+    return true;
+}
+
+window.onload = loadCheckout;
+
+</script>
+
+{% endblock %}

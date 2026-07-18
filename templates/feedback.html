@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="auth-section">
+
+<div class="feedback-wrapper">
+
+    <!-- ===================== -->
+    <!-- Review Summary -->
+    <!-- ===================== -->
+    <div class="review-summary">
+
+        <h2 class="reviews-title">Customer Reviews</h2>
+
+        <h1>{{ avg_rating if avg_rating else 0 }} ⭐</h1>
+
+        <div class="review-stars">
+            {% for i in range((avg_rating if avg_rating else 0)|int) %}
+                ⭐
+            {% endfor %}
+        </div>
+
+        <p>{{ total_reviews }} Reviews</p>
+
+        <div class="rating-breakdown">
+
+            {% for i in range(5,0,-1) %}
+            <div class="rating-row">
+
+                <span>{{ i }} ⭐</span>
+
+                <div class="rating-bar">
+                    <div class="rating-fill"
+                         style="width:{{ (rating_counts[i] / total_reviews * 100) if total_reviews else 0 }}%">
+                    </div>
+                </div>
+
+                <span>{{ rating_counts[i] }}</span>
+
+            </div>
+            {% endfor %}
+
+        </div>
+    </div>
+
+
+    <!-- ===================== -->
+    <!-- Feedback Form -->
+    <!-- ===================== -->
+    <div class="auth-container">
+
+        {% if session.get("user_id") %}
+
+        <h2>Give Feedback</h2>
+
+        <form method="POST">
+
+            <div class="input-group">
+                <textarea name="message" rows="4"></textarea>
+                <label>Write your feedback</label>
+            </div>
+
+            <div style="margin:20px 0;">
+                <label>Rating</label>
+
+                <div class="star-rating">
+
+                    <input type="radio" name="rating" value="5" id="star5" required>
+                    <label for="star5">★</label>
+
+                    <input type="radio" name="rating" value="4" id="star4">
+                    <label for="star4">★</label>
+
+                    <input type="radio" name="rating" value="3" id="star3">
+                    <label for="star3">★</label>
+
+                    <input type="radio" name="rating" value="2" id="star2">
+                    <label for="star2">★</label>
+
+                    <input type="radio" name="rating" value="1" id="star1">
+                    <label for="star1">★</label>
+
+                </div>
+            </div>
+
+            <button type="submit" class="auth-btn">
+                Submit Feedback
+            </button>
+
+        </form>
+
+        {% else %}
+
+        <p class="login-message">
+            Please <a href="/login">login</a> to write feedback.
+        </p>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+
+<!-- ===================== -->
+<!-- All Reviews -->
+<!-- ===================== -->
+<div class="reviews-section">
+
+    <h2 class="reviews-title">All Reviews</h2>
+
+    {% if feedbacks|length == 0 %}
+
+        <p class="no-reviews">
+            No reviews yet. Be the first to leave feedback!
+        </p>
+
+    {% else %}
+
+    <div class="reviews-container">
+
+        {% for fb in feedbacks %}
+
+        <div class="review-card">
+
+            <div class="review-header">
+
+                <strong>{{ fb.username.split('@')[0] }}</strong>
+
+                <span class="review-stars">
+                    {% for i in range(fb.rating) %}
+                        ⭐
+                    {% endfor %}
+                </span>
+
+            </div>
+
+            <p class="review-message">
+                {{ fb.message }}
+            </p>
+
+            <!-- ✅ ADMIN REPLY -->
+            {% if fb.admin_reply %}
+            <div class="admin-reply">
+                <strong>Admin Reply:</strong>
+                <p>{{ fb.admin_reply }}</p>
+            </div>
+            {% endif %}
+
+            <div class="review-date">
+                {{ fb.created_at[:16] if fb.created_at else "Just now" }}
+            </div>
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
+    {% endif %}
+
+</div>
+
+</section>
+
+{% endblock %}

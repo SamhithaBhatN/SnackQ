@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="dashboard-section">
+    <h2 class="dashboard-title">Staff Order Dashboard</h2>
+    <div class="dashboard-top-actions" style="justify-content: space-between;">
+        <a href="/change_password" class="update-btn">Change Password</a>
+    </div>
+    <div class="orders-container">
+        {% for order in orders %}
+        <div class="order-card">
+            <div class="order-header">
+                <div>
+                    <strong>Order ID:</strong> {{ order.id }} <br>
+                    <small>{{ order.created_at }}</small><br>
+                    <small>{{ order.time_ago }}</small> <br>
+                    <strong>Total:</strong> ₹{{ order.total_amount }}
+                </div>
+
+                <span class="status-badge {{ order.status }}">
+                    {{ order.status }}
+                </span>
+            </div>
+
+            <div class="order-items">
+                {% for item in order["items"] %}
+                <div class="order-item">
+                    {{ item.item_name }} (x{{ item.quantity }})
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="order-actions">
+
+    {% if order.status != "Completed" %}
+
+        <form action="{{ url_for('update_order', order_id=order.id) }}" method="POST" class="status-actions">
+
+            <button type="submit"
+                name="status"
+                value="Preparing"
+                class="update-btn"
+                {% if order.status != "Received" %}disabled{% endif %}>
+                    Preparing
+            </button>
+
+            <button type="submit"
+                name="status"
+                value="Completed"
+                class="update-btn"
+                {% if order.status != "Preparing" %}disabled{% endif %}>
+                    Completed
+            </button>
+
+        </form>
+
+    {% endif %}
+
+    </div>
+        </div>
+        {% endfor %}
+
+    </div>
+</section>
+
+<script>
+let refreshEnabled = true;
+
+document.getElementById("orderSearch").addEventListener("focus", () => {
+    refreshEnabled = false;
+});
+
+document.getElementById("orderSearch").addEventListener("blur", () => {
+    refreshEnabled = true;
+});
+
+setInterval(() => {
+    if (refreshEnabled) {
+        window.location.reload();
+    }
+}, 10000);
+
+function filterOrders() {
+    const input = document.getElementById("orderSearch").value.toLowerCase();
+    const cards = document.querySelectorAll(".order-card");
+
+    cards.forEach(card => {
+        const text = card.innerText.toLowerCase();
+        card.style.display = text.includes(input) ? "block" : "none";
+    });
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="dashboard-section">
+
+<h2 class="dashboard-title">Edit Menu Item</h2>
+
+<form method="POST" action="/staff/update_menu/{{ item.id }}" class="menu-form">
+
+<input type="text" name="name" value="{{ item.name }}" required>
+
+<input type="number" name="price" value="{{ item.price }}" required>
+
+<select name="category">
+
+<option {% if item.category == "Drinks" %}selected{% endif %}>Drinks</option>
+<option {% if item.category == "Breakfast" %}selected{% endif %}>Breakfast</option>
+<option {% if item.category == "Lunch" %}selected{% endif %}>Lunch</option>
+<option {% if item.category == "Snacks" %}selected{% endif %}>Snacks</option>
+
+</select>
+
+<input type="text" name="image" value="{{ item.image }}" required>
+
+<button type="submit">Update Item</button>
+
+</form>
+
+</section>
+
+{% endblock %}

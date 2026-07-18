@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="auth-section">
+    <div class="auth-container">
+        <h2>Create Your SnackQ Account</h2>
+
+        <form method="POST">
+
+            <div class="input-group">
+                <input type="text" name="username" required>
+                <label>Username</label>
+            </div>
+
+            <div class="input-group password-group">
+                <input type="password" name="password" id="register_password" required>
+                <label>Password</label>
+                <span class="toggle-password" onclick="togglePassword('register_password', this)">👁</span>
+            </div>
+
+            <div class="input-group password-group">
+                <input type="password" id="confirm_password" required>
+                <label>Confirm Password</label>
+                <span class="toggle-password" onclick="togglePassword('confirm_password', this)">👁</span>
+            </div>
+
+            <button type="submit" class="auth-btn">Register</button>
+
+            <p class="auth-switch">
+                Already have an account? <a href="/login">Login</a>
+            </p>
+
+        </form>
+    </div>
+</section>
+
+{% endblock %}

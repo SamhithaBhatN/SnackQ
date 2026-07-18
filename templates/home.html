@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section class="hero">
+    <div class="hero-overlay"></div>
+
+    <div class="hero-content">
+        <h1>Skip the Queue. Order Smart.</h1>
+        <p>Smart Canteen Order & Queue Management System</p>
+        {% if not session.get("role") %}
+        <a href="/menu" class="cta-btn">Order Now</a>
+        <a href="/login" class="cta-btn">Login Now</a>
+        {% elif session.get("role") == "customer" %}
+        <a href="/menu" class="cta-btn">Order Now</a>
+        {% endif %}
+    </div>
+</section>
+
+{% endblock %}

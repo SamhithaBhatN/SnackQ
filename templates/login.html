@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="auth-section">
+    <div class="auth-container">
+        <h2>Login to SnackQ</h2>
+        
+        <form method="POST">
+
+            <div class="input-group">
+                <input type="text" name="username" value="{{ username or '' }}" required>
+                <label>Username</label>
+            </div>
+
+            <div class="input-group password-group">
+                <input type="password" name="password" id="login_password" required>
+                <label>Password</label>
+                <span class="toggle-password" onclick="togglePassword('login_password', this)">👁</span>
+            </div>
+
+            <p style="text-align:right; font-size:13px;">
+                <a href="/forgot_password">Forgot Password?</a>
+            </p>
+
+            <button type="submit" class="auth-btn">Login</button>
+
+            <p class="auth-switch">
+                Don’t have an account? <a href="/register">Register</a>
+            </p>
+
+        </form>
+    </div>
+</section>
+
+{% endblock %}

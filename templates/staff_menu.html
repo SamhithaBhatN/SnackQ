@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="dashboard-section">
+
+<h2 class="dashboard-title">Manage Menu</h2>
+
+<!-- ADD ITEM FORM -->
+<div class="admin-section">
+
+<form method="POST" action="/staff/add_menu" enctype="multipart/form-data" class="staff-menu-form">
+
+<input type="text" name="name" placeholder="Item name" required>
+
+<input type="number" name="price" placeholder="Price" required>
+
+<select name="category">
+<option>Drinks</option>
+<option>Breakfast</option>
+<option>Lunch</option>
+<option>Snacks</option>
+</select>
+
+<input type="file" name="image" required>
+
+<button type="submit" class="auth-btn">Add Item</button>
+
+</form>
+
+</div>
+
+<!-- SEARCH -->
+<input type="text" id="searchInput" placeholder="Search item..." class="search-input">
+
+<br><br>
+
+<!-- MENU ITEMS -->
+<div class="menu-manage-container">
+    {% if menu_items|length == 0 %}
+    <p style="text-align:center; color:gray;">
+        No menu items added yet.
+    </p>
+    {% endif %}
+
+{% for item in menu_items %}
+
+<div class="menu-manage-card">
+
+    <!-- IMAGE -->
+    <img src="{{ url_for('static', filename='images/' + (item.image if item.image else 'default.jpg')) }}" alt="{{ item.name }}">
+
+    <!-- INFO -->
+    <div class="menu-info">
+        <h3>{{ item.name }}</h3>
+        <p><strong>₹{{ item.price }}</strong> | {{ item.category }}</p>
+
+        {% if item.available == 0 %}
+            <span class="out-badge">Out of Stock</span>
+        {% endif %}
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="menu-actions">
+
+        <a href="/staff/toggle_stock/{{ item.id }}" class="stock-btn">
+            {% if item.available == 1 %}
+                Mark Out of Stock
+            {% else %}
+                Mark Available
+            {% endif %}
+        </a>
+
+        <a href="/staff/edit_menu/{{ item.id }}" class="edit-btn">Edit</a>
+
+        <a href="/staff/delete_menu/{{ item.id }}" 
+        class="delete-btn"
+        onclick="return confirm('Delete this item?')">
+            Delete
+        </a>
+
+    </div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+</section>
+
+<!-- SEARCH SCRIPT -->
+<script>
+document.getElementById("searchInput").addEventListener("keyup", function () {
+
+    let value = this.value.toLowerCase();
+
+    document.querySelectorAll(".menu-manage-card").forEach(card => {
+
+        let name = card.querySelector("h3").innerText.toLowerCase();
+        let info = card.querySelector("p").innerText.toLowerCase();
+
+        if (name.includes(value) || info.includes(value)) {
+            card.style.display = "flex";
+        } else {
+            card.style.display = "none";
+        }
+
+    });
+
+});
+</script>
+
+{% endblock %}

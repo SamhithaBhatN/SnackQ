@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SnackQ</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="global-bg"></div>
+    <nav class="navbar">
+        <div class="logo">Snack<span>Q</span></div>
+
+        <ul class="nav-links">
+            {% if not session.get("role") %}
+            <li><a href="/">Home</a></li>
+            <li><a href="/menu">Menu</a></li>
+            <li><a href="/about">About</a></li>
+            <li><a href="/feedback">Feedback</a></li>
+            
+            {% elif session.get("role") == "customer" %}
+            <li><a href="/">Home</a></li>
+            <li><a href="/menu">Menu</a></li>
+            <li><a href="/about">About</a></li>
+            <li><a href="/cart" class="cart-link">
+            Cart
+            <span id="cart-count" class="cart-badge">0</span></a></li>
+            <li><a href="/feedback">Feedback</a></li>
+            {% endif %}
+        </ul>
+
+        <div class="nav-buttons">
+            {% if session.get("role") == "customer" %}
+                <div class="profile-dropdown">
+                <!-- Avatar Button -->
+                    <div class="profile-icon" onclick="toggleDropdown()">
+                    {{ session.get("user")[0].upper() if session.get("user") else "U" }}
+                    </div>
+
+                    <!-- Dropdown Menu -->
+                    <div class="dropdown-menu" id="dropdownMenu">
+                        <a href="/profile">My Profile</a>
+                        <a href="/logout">Logout</a>
+                    </div>
+                </div>
+            
+            {% elif session.get("role") == "staff" %}
+            <a href="/staff" class="login-btn">Dashboard</a>
+            <a href="/menu">View Menu</a>
+            <a href="/staff/menu">Manage Menu</a>
+            <a href="/logout" class="register-btn">Logout</a>
+
+            {% elif session.get("role") == "admin" %}
+            <a href="/admin" class="login-btn">Admin Panel</a>
+            <a href="/menu">View Menu</a>
+            <a href="/admin/feedback">Feedback</a>
+            <a href="/logout" class="register-btn">Logout</a>
+
+            {% else %}
+            <a href="/login" class="login-btn">Login</a>
+            <a href="/register" class="register-btn">Register</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flash-container">
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <p>© <span id="year"></span> SnackQ. All Rights Reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        document.getElementById("year").innerHTML = new Date().getFullYear();
+        function updateCartBadge() {
+            let cart = JSON.parse(localStorage.getItem("cart")) || [];
+            let totalItems = 0;
+
+            cart.forEach(item => {
+                totalItems += item.quantity;
+            });
+
+            const badge = document.getElementById("cart-count");
+
+            if (badge) {
+                if (totalItems > 0) {
+                    badge.innerText = totalItems;
+                    badge.style.display = "inline-block";
+                } else {
+                    badge.style.display = "none";
+                }
+            }
+        }
+
+window.addEventListener("load", () => {
+    const flashes = document.querySelectorAll(".flash");
+
+    if (flashes.length > 0) {
+        setTimeout(() => {
+            flashes.forEach(flash => {
+                flash.style.transition = "opacity 0.5s ease";
+                flash.style.opacity = "0";
+                setTimeout(() => flash.remove(), 500);
+            });
+        }, 3000);
+    }
+});
+
+function toggleDropdown() {
+    document.getElementById("dropdownMenu").classList.toggle("show");
+}
+
+// Close when clicking outside
+window.onclick = function(event) {
+    if (!event.target.closest('.profile-dropdown')) {
+        document.getElementById("dropdownMenu").classList.remove("show");
+    }
+}
+
+function togglePassword(fieldId, el) {
+    const input = document.getElementById(fieldId);
+
+    if (input.type === "password") {
+        input.type = "text";
+        el.textContent = "🙈";
+    } else {
+        input.type = "password";
+        el.textContent = "👁";
+    }
+}
+
+</script>
+</body>
+</html>

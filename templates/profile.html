@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="dashboard-section">
+
+    <!-- USER INFO -->
+    <div class="profile-card">
+    <h2>My Profile</h2>
+
+    <div class="profile-info">
+        <p><strong>Username:</strong> {{ user.username.split('@')[0] }}</p>
+        <p><strong>Name:</strong> {{ user.full_name or "Add your name" }}</p>
+        <p><strong>Phone:</strong> {{ user.phone or "Not set" }}</p>
+        <p><strong>Email:</strong> {{ user.username }}</p>
+        <p><strong>Role:</strong> {{ user.role }}</p>
+        {% if user.created_at %}
+            <p><strong>Joined:</strong> {{ user.created_at.split(" ")[0] }}</p>
+        {% endif %}
+    </div>
+
+    <div class="profile-actions">
+        <a href="/change_password" class="profile-btn">Change Password</a>
+        <a href="/edit_profile" class="profile-btn">Edit Profile</a>
+        <a href="/logout" class="profile-btn logout">Logout</a>
+    </div>
+    </div>
+    <div class="profile-stats">
+    <div class="stat-box">
+        <h3>{{ orders|length }}</h3>
+        <p>Total Orders</p>
+    </div>
+
+    <div class="stat-box">
+        <h3>
+            {{ orders | selectattr('status', 'equalto', 'Completed') | list | length }}
+        </h3>
+        <p>Completed</p>
+    </div>
+
+    <div class="stat-box">
+        <h3>
+            {{ orders | selectattr('status', 'equalto', 'Preparing') | list | length }}
+        </h3>
+        <p>Preparing</p>
+    </div>
+    </div>
+
+    <!-- ORDERS -->
+    <h2 class="dashboard-title">My Orders</h2>
+
+    {% if orders %}
+        {% for order in orders %}
+        <div class="order-card">
+
+            <div class="order-header">
+                <div>
+                    <strong>Order ID:</strong> {{ order.id }} <br>
+                    <small class="order-date">{{ order.created_at }}</small>
+                </div>
+
+                <span class="status-badge {{ order.status }}">
+                    {{ order.status }}
+                </span>
+            </div>
+
+            <div class="order-items">
+                {% for item in order["items"] %}
+                <div class="order-item">
+                    <span>{{ item.item_name }}</span>
+                    <span>x{{ item.quantity }}</span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="order-total">
+                <strong>Total:</strong> ₹{{ order.total_amount }}
+            </div>
+
+            <!-- ✅ REORDER BUTTON -->
+            {% if order.status != "Cancelled" %}
+                <form method="POST" action="/reorder/{{ order.id }}">
+                    <button class="reorder-btn">Reorder</button>
+                </form>
+            {% endif %}
+
+            {% if order.status not in ["Completed", "Cancelled"] %}
+            <div class="queue-info">
+                <div><strong>Queue Position:</strong> #{{ order.position }}</div>
+                <div><strong>Orders Ahead:</strong> {{ order.orders_ahead }}</div>
+                <div><strong>Estimated Time:</strong> {{ order.estimated_time }} mins</div>
+            </div>
+            {% endif %}
+            
+            {% if order.status == "Received" %}
+                <form method="POST" action="/cancel_order/{{ order.id }}">
+                    <button class="cancel-btn"
+                        onclick="return confirm('Are you sure you want to cancel this order?')">
+                        Cancel Order
+                    </button>
+                </form>
+            {% endif %}
+            {% if order.status == "Cancelled" %}
+            <div class="cancel-note">
+                This order was cancelled
+            </div>
+        {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="no-orders">
+            <p>No orders yet 🍽</p>
+            <a href="/menu" class="auth-btn">Order Now</a>
+        </div>
+    {% endif %}
+
+</section>
+
+{% endblock %}

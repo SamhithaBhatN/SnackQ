@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="dashboard-section">
+    <h2 class="dashboard-title">Admin Dashboard</h2>
+
+    <!-- Statistics -->
+    <div class="admin-stats">
+
+        <div class="stat-card">
+            <h3>Total Orders</h3>
+            <p>{{ total_orders }}</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Total Revenue</h3>
+            <p>₹{{ total_revenue }}</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Total Customers</h3>
+            <p>{{ total_customers }}</p>
+        </div>
+
+    </div>
+
+    <!-- Add Staff -->
+    <div class="admin-section">
+        <h3>Add Staff</h3>
+
+        <form method="POST" action="/add_staff">
+            <input type="text" name="username" placeholder="Staff Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit" class="update-btn">Add Staff</button>
+        </form>
+    </div>
+
+    <!-- Staff List -->
+    <div class="admin-section">
+        <h3>Staff Members</h3>
+
+        {% for staff in staff_members %}
+    <div class="staff-row">
+        <span>{{ staff.username }}</span>
+
+        <form method="POST" action="/delete_staff/{{ staff.id }}" style="display:inline;">
+        <button type="submit" class="delete-btn"
+                onclick="return confirm('Delete this staff member?')">
+            Delete
+        </button>
+        </form>
+    </div>
+    {% endfor %}
+    </div>
+
+    <a href="/admin/sales" class="profile-btn">View Food Sales</a>
+    <a href="/export_orders" class="report-btn">Download Orders Report (PDF)</a>
+    <div class="chart-card">
+        <div class="chart-header">
+            <h2>Orders & Revenue Analytics</h2>
+            <p>Track daily order growth and revenue performance</p>
+            <div class="chart-filters">
+            <button class="filter-btn active" onclick="updateChart('daily', this)">Daily</button>
+            <button class="filter-btn" onclick="updateChart('weekly', this)">Weekly</button>
+            <button class="filter-btn" onclick="updateChart('monthly', this)">Monthly</button>
+            <button class="filter-btn" onclick="updateChart('yearly', this)">Yearly</button>
+        </div>
+    </div>
+
+        <div class="chart-wrapper">
+            <canvas id="analyticsChart"></canvas>
+        </div>
+    </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+const chartData = {
+    daily: {
+        labels: {{ daily_dates|tojson }},
+        orders: {{ daily_orders|tojson }},
+        revenue: {{ daily_revenues|tojson }}
+    },
+    weekly: {
+        labels: {{ weekly_dates|tojson }},
+        orders: {{ weekly_orders|tojson }},
+        revenue: {{ weekly_revenues|tojson }}
+    },
+    monthly: {
+        labels: {{ monthly_dates|tojson }},
+        orders: {{ monthly_orders|tojson }},
+        revenue: {{ monthly_revenues|tojson }}
+    },
+    yearly: {
+        labels: {{ yearly_dates|tojson }},
+        orders: {{ yearly_orders|tojson }},
+        revenue: {{ yearly_revenues|tojson }}
+    }
+};
+
+const ctx = document.getElementById("analyticsChart").getContext("2d");
+
+const analyticsChart = new Chart(ctx, {
+    type: "line",
+    data: {
+        labels: chartData.daily.labels,
+        datasets: [
+            {
+                label: "Orders",
+                data: chartData.daily.orders,
+                borderColor: "#ff914d",
+                backgroundColor: "rgba(255,145,77,0.15)",
+                fill: true,
+                tension: 0.3
+            },
+            {
+                label: "Revenue (₹)",
+                data: chartData.daily.revenue,
+                borderColor: "#2ecc71",
+                backgroundColor: "rgba(46,204,113,0.15)",
+                fill: true,
+                tension: 0.3
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: "top"
+            }
+        }
+    }
+});
+
+function updateChart(type, button) {
+    document.querySelectorAll(".filter-btn").forEach(btn => btn.classList.remove("active"));
+    button.classList.add("active");
+
+    analyticsChart.data.labels = chartData[type].labels;
+    analyticsChart.data.datasets[0].data = chartData[type].orders;
+    analyticsChart.data.datasets[1].data = chartData[type].revenue;
+
+    analyticsChart.update();
+}
+</script>
+</section>
+
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="menu-section">
+
+    <h2 class="menu-title">Our Menu</h2>
+    <input type="text" id="searchInput" placeholder="Search food..." class="search-input">
+    <!-- Category Filters -->
+    <div class="menu-filters">
+        <button class="filter-btn active" onclick="filterMenu('all', event)">All</button>
+        <button class="filter-btn" onclick="filterMenu('Drinks', event)">Drinks</button>
+        <button class="filter-btn" onclick="filterMenu('Breakfast', event)">Breakfast</button>
+        <button class="filter-btn" onclick="filterMenu('Lunch', event)">Lunch</button>
+        <button class="filter-btn" onclick="filterMenu('Snacks', event)">Snacks</button>
+    </div>
+
+    <!-- Menu Items Grid -->
+    <div class="menu-grid">
+    {% for item in menu_items %}
+        <div class="menu-card" data-category="{{ item.category }}">
+            <img src="{{ url_for('static', filename='images/' + (item.image or 'default.jpg')) }}" alt="{{ item.name }}">
+            <h3>{{ item.name }}</h3>
+            <p class="price">₹{{ item.price }}</p>
+            {% if session.get("role") == "customer" %}
+                {% if item.available == 1 %}
+                    <button class="add-cart-btn"
+                        onclick='addToCart({{ item.name|tojson }}, {{ item.price }}, {{ (item.image or "default.jpg")|tojson }})'>
+                        Add to Cart
+                    </button>
+                {% else %}
+                    <button class="add-cart-btn" disabled>
+                        Out of Stock
+                    </button>
+                {% endif %}
+            {% elif not session.get("user_id") %}
+                    <button class="add-cart-btn" onclick="alert('Please login first')">
+                        Add to Cart
+                    </button>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<script>
+function filterMenu(category, event) {
+    const cards = document.querySelectorAll('.menu-card');
+    const buttons = document.querySelectorAll('.filter-btn');
+
+    // Active button highlight
+    buttons.forEach(btn => btn.classList.remove('active'));
+    if (event) event.target.classList.add('active');
+
+    // Filter cards
+    cards.forEach(card => {
+        if (category === 'all' || card.dataset.category === category) {
+            card.style.display = "block";
+        } else {
+            card.style.display = "none";
+        }
+    });
+}
+
+document.getElementById("searchInput").addEventListener("keyup", function () {
+
+    let value = this.value.toLowerCase();
+
+    // Reset filter buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector('.filter-btn').classList.add('active'); // "All"
+
+    document.querySelectorAll(".menu-card").forEach(card => {
+
+        let name = card.querySelector("h3").innerText.toLowerCase();
+
+        if (name.includes(value)) {
+            card.style.display = "block";
+        } else {
+            card.style.display = "none";
+        }
+
+    });
+});
+
+/* ADD TO CART FUNCTION */
+
+function addToCart(name, price, image) {
+
+    let cart = JSON.parse(localStorage.getItem("cart")) || [];
+
+    const existingItem = cart.find(item => item.name === name);
+
+    if (existingItem) {
+        existingItem.quantity += 1;
+    } else {
+        cart.push({
+            name: name,
+            price: price,
+            image: image,
+            quantity: 1
+        });
+    }
+
+    localStorage.setItem("cart", JSON.stringify(cart));
+    updateCartBadge();
+    alert(name + " added to cart!");
+}
+</script>
+
+{% endblock %}

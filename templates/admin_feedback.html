@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="feedback-section">
+
+<h2 class="dashboard-title">Customer Feedback</h2>
+
+{% if feedbacks|length == 0 %}
+
+<p class="no-reviews">No feedback submitted yet.</p>
+
+{% else %}
+
+<div class="reviews-container">
+
+{% for fb in feedbacks %}
+
+<div class="review-card">
+
+    <div class="review-header">
+        <strong>{{ fb.username.split('@')[0] }}</strong>
+
+        <div>
+            <span class="review-stars">
+                {% for i in range(fb.rating) %}
+                    ⭐
+                {% endfor %}
+            </span>
+
+            <a href="/admin/delete_feedback/{{ fb.id }}" class="delete-btn">Delete</a>
+        </div>
+    </div>
+
+    <p class="review-message">
+        {{ fb.message }}
+    </p>
+
+    <div class="review-date">
+        {{ fb.created_at }}
+    </div>
+
+    <!-- ✅ ADMIN REPLY SECTION -->
+    {% if fb.admin_reply %}
+        <div class="admin-reply">
+            <strong>Admin Reply:</strong>
+            <p>{{ fb.admin_reply }}</p>
+        </div>
+    {% else %}
+        <form method="POST" action="/admin/reply_feedback/{{ fb.id }}" class="reply-form">
+            <input type="text" name="reply" placeholder="Write reply..." required>
+            <button type="submit">Reply</button>
+        </form>
+    {% endif %}
+
+</div>
+
+{% endfor %}
+
+</div>
+
+{% endif %}
+
+</section>
+
+{% endblock %}

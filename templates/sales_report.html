@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="dashboard-section">
+    <h2 class="dashboard-title">Food Sales Report</h2>
+
+    <table class="sales-table">
+        <thead>
+            <tr>
+                <th>Food Item</th>
+                <th>Total Sold</th>
+                <th>Total Revenue</th>
+                <th>Total Orders</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in sold_items %}
+            <tr>
+                <td>{{ item.item_name }}</td>
+                <td>{{ item.total_sold }}</td>
+                <td>₹{{ item.total_revenue }}</td>
+                <td>{{ item.total_orders }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+{% endblock %}

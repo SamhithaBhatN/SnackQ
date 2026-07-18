@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="cart-section" style="text-align:center;">
+    <h2 class="cart-title">Order Placed Successfully 🎉</h2>
+
+    <div class="cart-summary" style="margin:auto; max-width:400px;">
+        <p><strong>Order ID:</strong> {{ order_id }}</p>
+        <p>Status: Received</p>
+
+        <br>
+        <a href="/menu" class="checkout-btn" style="display:inline-block; text-decoration:none;">
+            Continue Ordering
+        </a>
+    </div>
+</section>
+
+<script>
+localStorage.removeItem("cart");
+</script>
+
+{% endblock %}

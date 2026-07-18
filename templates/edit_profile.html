@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="auth-section">
+    <div class="auth-container">
+        <h2>Edit Profile</h2>
+
+        <form method="POST">
+
+            <div class="input-group">
+                <input type="text" name="name" value="{{ user.full_name or '' }}" required>
+                <label>Name</label>
+            </div>
+
+            <div class="input-group">
+                <input type="text" name="phone" value="{{ user.phone or '' }}" required>
+                <label>Phone</label>
+            </div>
+
+            <button type="submit" class="auth-btn">Update Profile</button>
+
+        </form>
+    </div>
+</section>
+
+{% endblock %}
