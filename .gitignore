@@ -1,13 +1,14 @@
-# Virtual Environment
-.venv/
-
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
+*.pyo
 
-# Environment Variables
-.env
+# Virtual Environment
+.venv/
+venv/
+
+# Database
+*.db
 
 # IDE
 .vscode/
@@ -16,9 +17,3 @@ __pycache__/
 # OS Files
 .DS_Store
 Thumbs.db
-
-# Flask
-instance/
-
-# Logs
-*.log
