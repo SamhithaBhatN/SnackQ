@@ -29,24 +29,33 @@ app.config.from_object(Config)
 DATABASE = app.config["DATABASE"]
 app.secret_key = app.config["SECRET_KEY"]
 
+import re
 
-# -----------------------
-# HELPERS
-# -----------------------
+def validate_password(password):
+    """
+    Validate password strength.
 
-def is_strong_password(password):
+    Returns:
+        (True, "") if valid
+        (False, "Reason") if invalid
+    """
+
     if len(password) < 8:
-        return False
-    if not re.search(r"[A-Z]", password):
-        return False
-    if not re.search(r"[a-z]", password):
-        return False
-    if not re.search(r"[0-9]", password):
-        return False
-    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
-        return False
-    return True
+        return False, "Password must be at least 8 characters long."
 
+    if not re.search(r"[A-Z]", password):
+        return False, "Password must contain at least one uppercase letter."
+
+    if not re.search(r"[a-z]", password):
+        return False, "Password must contain at least one lowercase letter."
+
+    if not re.search(r"[0-9]", password):
+        return False, "Password must contain at least one number."
+
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        return False, "Password must contain at least one special character."
+
+    return True, ""
 
 # -----------------------
 # DATABASE CONNECTION
@@ -55,8 +64,8 @@ def is_strong_password(password):
 def get_db_connection():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
-
 
 # -----------------------
 # CREATE TABLES
@@ -67,39 +76,40 @@ def init_db():
     cursor = conn.cursor()
 
     # Users table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT,
-            role TEXT DEFAULT 'user',
-            full_name TEXT,
-            email TEXT,
-            phone TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'customer',
+        full_name TEXT,
+        email TEXT UNIQUE,
+        phone TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+""")
 
     # Menu table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS menu (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            price REAL,
-            category TEXT,
-            image TEXT,
-            available INTEGER DEFAULT 1
-        )
-    ''')
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS menu (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        price REAL NOT NULL,
+        category TEXT NOT NULL,
+        image TEXT,
+        available INTEGER DEFAULT 1
+    )
+""")
 
     # Orders table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
+            user_id INTEGER NOT NULL,
             total_amount REAL,
-            status TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            status TEXT NOT NULL DEFAULT 'Pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
         )
     ''')
 
@@ -107,10 +117,11 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS order_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            order_id INTEGER,
-            item_name TEXT,
-            price REAL,
-            quantity INTEGER
+            order_id INTEGER NOT NULL,
+            item_name TEXT NOT NULL,
+            price REAL NOT NULL,
+            quantity INTEGER NOT NULL,
+            FOREIGN KEY(order_id) REFERENCES orders(id)
         )
     ''')
 
@@ -127,20 +138,26 @@ def init_db():
     ''')
 
     try:
-        cursor.execute("ALTER TABLE feedback ADD COLUMN admin_reply TEXT")
-    except:
+        cursor.execute(
+            "ALTER TABLE feedback ADD COLUMN admin_reply TEXT"
+        )
+    except sqlite3.OperationalError:
         pass
 
     # Create admin if not exists
     admin = cursor.execute(
-        "SELECT * FROM users WHERE username=?",
+        "SELECT id FROM users WHERE username = ?",
         ("admin",)
     ).fetchone()
 
     if not admin:
         cursor.execute(
             "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-            ("admin", generate_password_hash("Admin@2026"), "admin")
+            (
+            "admin",
+            generate_password_hash(app.config["ADMIN_PASSWORD"]),
+            "admin"
+            )
         )
 
     conn.commit()
@@ -1180,31 +1197,91 @@ def delete_staff(staff_id):
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        full_name = request.form.get("full_name", "")
-        email = request.form.get("email", "")
-        phone = request.form.get("phone", "")
+
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        full_name = request.form.get("full_name", "").strip()
+        email = request.form.get("email", "").strip()
+        phone = request.form.get("phone", "").strip()
+
         role = "customer"
 
-        if not is_strong_password(password):
-            flash("Password must be at least 8 characters with uppercase, lowercase, number and special character.")
+        # Required fields
+        if not username or not password:
+            flash("Username and password are required.", "error")
+            return render_template("register.html")
 
-        hashed_password = generate_password_hash(password)
+        # Password validation
+        valid, message = validate_password(password)
+
+        if not valid:
+            flash(message, "error")
+            return render_template("register.html")
+
         conn = get_db_connection()
 
         try:
+            # Check existing username
+            existing_user = conn.execute(
+                "SELECT id FROM users WHERE username = ?",
+                (username,)
+            ).fetchone()
+
+            if existing_user:
+                flash("Username already exists.", "error")
+                return render_template("register.html")
+
+            # Check existing email
+            if email:
+                existing_email = conn.execute(
+                    "SELECT id FROM users WHERE email = ?",
+                    (email,)
+                ).fetchone()
+
+                if existing_email:
+                    flash("Email is already registered.", "error")
+                    return render_template("register.html")
+
+            hashed_password = generate_password_hash(password)
+
             conn.execute("""
-                INSERT INTO users (username, password, role, full_name, email, phone, created_at)
+                INSERT INTO users (
+                    username,
+                    password,
+                    role,
+                    full_name,
+                    email,
+                    phone,
+                    created_at
+                )
                 VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-            """, (username, hashed_password, role, full_name, email, phone))
+            """, (
+                username,
+                hashed_password,
+                role,
+                full_name,
+                email,
+                phone
+            ))
 
             conn.commit()
-            conn.close()
+
+            flash(
+                "Registration successful! Please login.",
+                "success"
+            )
+
             return redirect(url_for("login"))
-        except:
+
+        except sqlite3.Error as e:
+            print("Database Error:", e)
+            flash(
+                "Unable to register. Please try again.",
+                "error"
+            )
+
+        finally:
             conn.close()
-            flash("Username already exists!")
 
     return render_template("register.html")
 
@@ -1217,34 +1294,54 @@ def login():
         session["login_attempts"] = 0
 
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
 
+        # Check for empty fields
+        if not username or not password:
+            flash("Username and password are required.", "error")
+            return render_template("login.html", username=username)
+
+        # Limit failed login attempts
         if session["login_attempts"] >= 5:
             flash("Too many failed attempts. Try again later.", "error")
             return render_template("login.html", username=username)
 
-        conn = get_db_connection()
+        try:
+            conn = get_db_connection()
 
-        user = conn.execute(
-            "SELECT * FROM users WHERE username=?",
-            (username,)
-        ).fetchone()
+            user = conn.execute(
+                "SELECT * FROM users WHERE username = ?",
+                (username,)
+            ).fetchone()
 
-        conn.close()
+            conn.close()
 
+        except Exception as e:
+            print(f"Database Error: {e}")
+            flash("Unable to connect to the database.", "error")
+            return render_template("login.html", username=username)
+
+        # Successful login
         if user and check_password_hash(user["password"], password):
+            session.clear()
+
             session["user"] = user["username"]
             session["role"] = user["role"]
             session["user_id"] = user["id"]
             session["login_attempts"] = 0
 
+            flash(f"Welcome back, {user['username']}!", "success")
             return redirect(url_for("home"))
-        else:
-            session["login_attempts"] += 1
-            flash(f"Invalid credentials ({session['login_attempts']}/5)", "error")
 
-            return render_template("login.html", username=username)
+        # Invalid credentials
+        session["login_attempts"] += 1
+        flash(
+            f"Invalid username or password. ({session['login_attempts']}/5)",
+            "error"
+        )
+
+        return render_template("login.html", username=username)
 
     return render_template("login.html", username=username)
 
