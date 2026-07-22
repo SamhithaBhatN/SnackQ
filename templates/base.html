@@ -89,63 +89,70 @@
     </footer>
 
     <script>
-        document.getElementById("year").innerHTML = new Date().getFullYear();
-        function updateCartBadge() {
-            let cart = JSON.parse(localStorage.getItem("cart")) || [];
-            let totalItems = 0;
 
-            cart.forEach(item => {
-                totalItems += item.quantity;
-            });
+document.getElementById("year").textContent = new Date().getFullYear();
 
-            const badge = document.getElementById("cart-count");
+function updateCartBadge() {
 
-            if (badge) {
-                if (totalItems > 0) {
-                    badge.innerText = totalItems;
-                    badge.style.display = "inline-block";
-                } else {
-                    badge.style.display = "none";
-                }
-            }
-        }
+    const badge = document.getElementById("cart-count");
 
-window.addEventListener("load", () => {
-    const flashes = document.querySelectorAll(".flash");
+    if (!badge) return;
 
-    if (flashes.length > 0) {
-        setTimeout(() => {
-            flashes.forEach(flash => {
-                flash.style.transition = "opacity 0.5s ease";
-                flash.style.opacity = "0";
-                setTimeout(() => flash.remove(), 500);
-            });
-        }, 3000);
+    const cartKey = currentUserId
+        ? `cart_${currentUserId}`
+        : "cart_guest";
+
+    const cart = JSON.parse(localStorage.getItem(cartKey)) || [];
+
+    let totalItems = 0;
+
+    cart.forEach(item => {
+        totalItems += item.quantity;
+    });
+
+    if (totalItems > 0) {
+        badge.innerText = totalItems;
+        badge.style.display = "inline-block";
+    } else {
+        badge.innerText = "";
+        badge.style.display = "none";
     }
-});
+}
 
 function toggleDropdown() {
-    document.getElementById("dropdownMenu").classList.toggle("show");
+    const menu = document.getElementById("dropdownMenu");
+    if (menu) menu.classList.toggle("show");
 }
 
-// Close when clicking outside
 window.onclick = function(event) {
-    if (!event.target.closest('.profile-dropdown')) {
-        document.getElementById("dropdownMenu").classList.remove("show");
+
+    const menu = document.getElementById("dropdownMenu");
+
+    if (
+        menu &&
+        !event.target.closest(".profile-dropdown")
+    ) {
+        menu.classList.remove("show");
     }
+
 }
 
-function togglePassword(fieldId, el) {
+function togglePassword(fieldId, icon) {
+
     const input = document.getElementById(fieldId);
+
+    if (!input) return;
 
     if (input.type === "password") {
         input.type = "text";
-        el.textContent = "🙈";
+        icon.textContent = "🙈";
     } else {
         input.type = "password";
-        el.textContent = "👁";
+        icon.textContent = "👁";
     }
 }
+
+window.onload = updateCartBadge;
 
 </script>
 </body>

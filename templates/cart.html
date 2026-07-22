@@ -32,60 +32,118 @@
 
 <script>
 
-// ✅ GLOBAL CART (single source of truth)
-let cart = JSON.parse(localStorage.getItem("cart")) || [];
+// ======================================
+// USER CART
+// ======================================
 
-// ✅ Inject reorder data from Flask
+const currentUserId = {{ session.get("user_id")|tojson }};
+
+const cartKey = currentUserId
+    ? `cart_${currentUserId}`
+    : "cart_guest";
+
+let cart = JSON.parse(localStorage.getItem(cartKey)) || [];
+
+
+// ======================================
+// REORDER SUPPORT
+// ======================================
+
 {% if reorder_cart %}
-    cart = {{ reorder_cart | tojson }};
-    localStorage.setItem("cart", JSON.stringify(cart));
+cart = {{ reorder_cart | tojson }};
+localStorage.setItem(cartKey, JSON.stringify(cart));
 {% endif %}
 
+
+// ======================================
 // LOAD CART
+// ======================================
+
 function loadCart() {
-    cart = JSON.parse(localStorage.getItem("cart")) || [];
+
+    cart = JSON.parse(localStorage.getItem(cartKey)) || [];
 
     const cartContainer = document.getElementById("cartItems");
+
     cartContainer.innerHTML = "";
 
     if (cart.length === 0) {
-        cartContainer.innerHTML = "<p class='empty-cart'>Your cart is empty.</p>";
+
+        cartContainer.innerHTML =
+            "<p class='empty-cart'>Your cart is empty.</p>";
+
         updateSummary();
+        updateCartBadge();
+
         return;
     }
 
     cart.forEach((item, index) => {
+
         cartContainer.innerHTML += `
         <div class="cart-item">
 
-        <img src="/static/images/${item.image || 'default.jpg'}" 
-         alt="${item.name}" class="cart-img">
+            <img
+                src="/static/images/${item.image || "default.jpg"}"
+                alt="${item.name}"
+                class="cart-img"
+            >
 
-        <div class="item-details">
-            <h3>${item.name}</h3>
-            <p class="item-price">₹${item.price}</p>
+            <div class="item-details">
 
-            <div class="quantity-control">
-                <button onclick="changeQty(${index}, -1)">-</button>
-                <span class="qty">${item.quantity}</span>
-                <button onclick="changeQty(${index}, 1)">+</button>
+                <h3>${item.name}</h3>
+
+                <p class="item-price">
+                    ₹${item.price}
+                </p>
+
+                <div class="quantity-control">
+
+                    <button onclick="changeQty(${index}, -1)">
+                        -
+                    </button>
+
+                    <span class="qty">
+                        ${item.quantity}
+                    </span>
+
+                    <button onclick="changeQty(${index}, 1)">
+                        +
+                    </button>
+
+                </div>
+
             </div>
+
+            <div class="item-total">
+                ₹${item.price * item.quantity}
+            </div>
+
+            <button
+                class="remove-btn"
+                onclick="removeItem(${index})"
+            >
+                ×
+            </button>
+
         </div>
+        `;
 
-        <div class="item-total">₹${item.price * item.quantity}</div>
-
-        <button class="remove-btn" onclick="removeItem(${index})">×</button>
-
-    </div>
-    `;
     });
 
     updateSummary();
+    updateCartBadge();
+
 }
 
+
+// ======================================
 // CHANGE QUANTITY
+// ======================================
+
 function changeQty(index, change) {
-    cart = JSON.parse(localStorage.getItem("cart")) || [];
+
+    cart = JSON.parse(localStorage.getItem(cartKey)) || [];
 
     cart[index].quantity += change;
 
@@ -93,51 +151,87 @@ function changeQty(index, change) {
         cart.splice(index, 1);
     }
 
-    localStorage.setItem("cart", JSON.stringify(cart));
+    localStorage.setItem(cartKey, JSON.stringify(cart));
+
     loadCart();
+
 }
 
+
+// ======================================
 // REMOVE ITEM
+// ======================================
+
 function removeItem(index) {
-    cart = JSON.parse(localStorage.getItem("cart")) || [];
+
+    cart = JSON.parse(localStorage.getItem(cartKey)) || [];
 
     cart.splice(index, 1);
 
-    localStorage.setItem("cart", JSON.stringify(cart));
+    localStorage.setItem(cartKey, JSON.stringify(cart));
+
     loadCart();
+
 }
 
-// CHECKOUT
-function goToCheckout() {
-    cart = JSON.parse(localStorage.getItem("cart")) || [];
 
-    if (cart.length === 0) {
-        alert("Your cart is empty!");
-        return;
-    }
+// ======================================
+// ORDER SUMMARY
+// ======================================
 
-    window.location.href = "/checkout";
-}
-
-// SUMMARY
 function updateSummary() {
-    cart = JSON.parse(localStorage.getItem("cart")) || [];
+
+    cart = JSON.parse(localStorage.getItem(cartKey)) || [];
 
     let totalItems = 0;
     let totalPrice = 0;
 
     cart.forEach(item => {
+
         totalItems += item.quantity;
+
         totalPrice += item.price * item.quantity;
+
     });
 
     document.getElementById("totalItems").innerText = totalItems;
-    document.getElementById("totalPrice").innerText = "₹" + totalPrice;
+
+    document.getElementById("totalPrice").innerText =
+        "₹" + totalPrice;
+
 }
 
-// INIT
-window.onload = loadCart;
 
+// ======================================
+// CHECKOUT
+// ======================================
+
+function goToCheckout() {
+
+    cart = JSON.parse(localStorage.getItem(cartKey)) || [];
+
+    if (cart.length === 0) {
+
+        alert("Your cart is empty!");
+
+        return;
+
+    }
+
+    window.location.href = "/checkout";
+
+}
+
+
+// ======================================
+// INITIALIZE
+// ======================================
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    loadCart();
+
+});
 </script>
 
 {% endblock %}

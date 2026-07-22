@@ -177,12 +177,22 @@ def home():
 @app.route("/menu")
 def menu():
     conn = get_db_connection()
-    menu_items = conn.execute("""
-        SELECT * FROM menu WHERE available = 1
-    """).fetchall()
-    conn.close()
 
-    return render_template("menu.html", menu_items=menu_items)
+    try:
+        menu_items = conn.execute("""
+            SELECT *
+            FROM menu
+            WHERE available = 1
+            ORDER BY category, name
+        """).fetchall()
+
+    finally:
+        conn.close()
+
+    return render_template(
+        "menu.html",
+        menu_items=menu_items
+    )
 
 
 @app.route("/about")
@@ -1137,29 +1147,89 @@ def export_orders():
 
 @app.route("/add_staff", methods=["POST"])
 def add_staff():
+
+    # Only admin can add staff
     if session.get("role") != "admin":
-        return "Access Denied"
+        flash("Access denied.", "error")
+        return redirect(url_for("login"))
 
-    username = request.form["username"]
-    password = request.form["password"]
+    username = request.form.get("username", "").strip()
+    full_name = request.form.get("full_name", "").strip()
+    email = request.form.get("email", "").strip()
+    phone = request.form.get("phone", "").strip()
+    password = request.form.get("password", "")
 
-    if not is_strong_password(password):
-        flash("Password must contain uppercase, lowercase, number and special character.", "error")
+    # Required fields
+    if not username or not full_name or not email or not password:
+        flash("Please fill in all required fields.", "error")
         return redirect(url_for("admin_dashboard"))
 
-    hashed_password = generate_password_hash(password)
+    # Password validation
+    valid, message = validate_password(password)
+
+    if not valid:
+        flash(message, "error")
+        return redirect(url_for("admin_dashboard"))
 
     conn = get_db_connection()
+
     try:
-        conn.execute(
-            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-            (username, hashed_password, "staff")
-        )
+
+        # Username already exists?
+        existing_user = conn.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (username,)
+        ).fetchone()
+
+        if existing_user:
+            flash("Username already exists.", "error")
+            return redirect(url_for("admin_dashboard"))
+
+        # Email already exists?
+        existing_email = conn.execute(
+            "SELECT id FROM users WHERE email = ?",
+            (email,)
+        ).fetchone()
+
+        if existing_email:
+            flash("Email is already registered.", "error")
+            return redirect(url_for("admin_dashboard"))
+
+        hashed_password = generate_password_hash(password)
+
+        conn.execute("""
+            INSERT INTO users
+            (
+                username,
+                password,
+                role,
+                full_name,
+                email,
+                phone,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        """, (
+            username,
+            hashed_password,
+            "staff",
+            full_name,
+            email,
+            phone
+        ))
+
         conn.commit()
-        flash("Staff added successfully!", "success")
-    except:
-        flash("Username already exists.", "error")
+
+        flash("Staff member added successfully!", "success")
+
+    except sqlite3.Error as e:
+
+        print("Database Error:", e)
+
+        flash("Unable to add staff.", "error")
+
     finally:
+
         conn.close()
 
     return redirect(url_for("admin_dashboard"))
@@ -1200,6 +1270,10 @@ def register():
 
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        if password != confirm_password:
+            flash("Passwords do not match.", "error")
+            return render_template("register.html")
         full_name = request.form.get("full_name", "").strip()
         email = request.form.get("email", "").strip()
         phone = request.form.get("phone", "").strip()
@@ -1314,7 +1388,7 @@ def login():
                 "SELECT * FROM users WHERE username = ?",
                 (username,)
             ).fetchone()
-
+            print("User:", user)
             conn.close()
 
         except Exception as e:
@@ -1323,6 +1397,10 @@ def login():
             return render_template("login.html", username=username)
 
         # Successful login
+        if user:
+            print("Stored password:", user["password"])
+            print("Entered password:", password)
+            print("Password match:", check_password_hash(user["password"], password))
         if user and check_password_hash(user["password"], password):
             session.clear()
 

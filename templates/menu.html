@@ -43,68 +43,133 @@
 </section>
 
 <script>
+
+const currentUserId = {{ session.get("user_id")|tojson }};
+
+const cartKey = currentUserId
+    ? `cart_${currentUserId}`
+    : "cart_guest";
+
+
+// =========================
+// CATEGORY FILTER
+// =========================
+
 function filterMenu(category, event) {
-    const cards = document.querySelectorAll('.menu-card');
-    const buttons = document.querySelectorAll('.filter-btn');
 
-    // Active button highlight
-    buttons.forEach(btn => btn.classList.remove('active'));
-    if (event) event.target.classList.add('active');
+    const cards = document.querySelectorAll(".menu-card");
 
-    // Filter cards
+    const buttons = document.querySelectorAll(".filter-btn");
+
+    buttons.forEach(btn => btn.classList.remove("active"));
+
+    if (event) {
+        event.target.classList.add("active");
+    }
+
     cards.forEach(card => {
-        if (category === 'all' || card.dataset.category === category) {
+
+        if (
+            category === "all" ||
+            card.dataset.category === category
+        ) {
             card.style.display = "block";
         } else {
             card.style.display = "none";
         }
+
     });
+
 }
 
-document.getElementById("searchInput").addEventListener("keyup", function () {
 
-    let value = this.value.toLowerCase();
+// =========================
+// SEARCH
+// =========================
 
-    // Reset filter buttons
-    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelector('.filter-btn').classList.add('active'); // "All"
+document.addEventListener("DOMContentLoaded", function () {
 
-    document.querySelectorAll(".menu-card").forEach(card => {
+    const searchInput = document.getElementById("searchInput");
 
-        let name = card.querySelector("h3").innerText.toLowerCase();
+    if (!searchInput) return;
 
-        if (name.includes(value)) {
-            card.style.display = "block";
-        } else {
-            card.style.display = "none";
-        }
+    searchInput.addEventListener("input", function () {
+
+        const value = this.value.toLowerCase();
+
+        document.querySelectorAll(".filter-btn")
+            .forEach(btn => btn.classList.remove("active"));
+
+        document.querySelector(".filter-btn")
+            .classList.add("active");
+
+        document.querySelectorAll(".menu-card")
+            .forEach(card => {
+
+                const name = card.querySelector("h3")
+                    .innerText
+                    .toLowerCase();
+
+                const category = card.dataset.category
+                    .toLowerCase();
+
+                if (
+                    name.includes(value) ||
+                    category.includes(value)
+                ) {
+
+                    card.style.display = "block";
+
+                } else {
+
+                    card.style.display = "none";
+
+                }
+
+            });
 
     });
+
+    updateCartBadge();
+
 });
 
-/* ADD TO CART FUNCTION */
+
+// =========================
+// ADD TO CART
+// =========================
 
 function addToCart(name, price, image) {
 
-    let cart = JSON.parse(localStorage.getItem("cart")) || [];
+    let cart = JSON.parse(localStorage.getItem(cartKey)) || [];
 
     const existingItem = cart.find(item => item.name === name);
 
     if (existingItem) {
-        existingItem.quantity += 1;
+
+        existingItem.quantity++;
+
     } else {
+
         cart.push({
+
             name: name,
             price: price,
             image: image,
             quantity: 1
+
         });
+
     }
 
-    localStorage.setItem("cart", JSON.stringify(cart));
+    localStorage.setItem(cartKey, JSON.stringify(cart));
+
     updateCartBadge();
+
     alert(name + " added to cart!");
+
 }
+
 </script>
 
 {% endblock %}
