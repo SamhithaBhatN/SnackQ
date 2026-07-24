@@ -56,7 +56,8 @@
         <form method="POST">
 
             <div class="input-group">
-                <textarea name="message" rows="4"></textarea>
+                <textarea name="message" rows="4" maxlength="500"></textarea>
+
                 <label>Write your feedback</label>
             </div>
 
@@ -83,9 +84,7 @@
                 </div>
             </div>
 
-            <button type="submit" class="auth-btn">
-                Submit Feedback
-            </button>
+            <button type="submit" class="auth-btn">Submit Feedback</button>
 
         </form>
 
@@ -135,9 +134,11 @@
 
             </div>
 
+            {% if fb.message %}
             <p class="review-message">
                 {{ fb.message }}
             </p>
+            {% endif %}
 
             <!-- ✅ ADMIN REPLY -->
             {% if fb.admin_reply %}

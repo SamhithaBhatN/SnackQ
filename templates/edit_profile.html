@@ -2,25 +2,66 @@
 {% block content %}
 
 <section class="auth-section">
+
     <div class="auth-container">
+
         <h2>Edit Profile</h2>
 
         <form method="POST">
 
+            <!-- Full Name -->
             <div class="input-group">
-                <input type="text" name="name" value="{{ user.full_name or '' }}" required>
-                <label>Name</label>
+
+                <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    value="{{ user.full_name }}"
+                    required
+                >
+
+                <label for="name">Full Name</label>
+
             </div>
 
+            <!-- Phone Number -->
             <div class="input-group">
-                <input type="text" name="phone" value="{{ user.phone or '' }}" required>
-                <label>Phone</label>
+
+                <input
+                    type="text"
+                    id="phone"
+                    name="phone"
+                    value="{{ user.phone }}"
+                    maxlength="10"
+                    pattern="[0-9]{10}"
+                    required
+                >
+
+                <label for="phone">Phone Number</label>
+
             </div>
 
-            <button type="submit" class="auth-btn">Update Profile</button>
+            <!-- Username (Read Only) -->
+            <div class="input-group">
+
+                <input
+                    type="text"
+                    value="{{ user.username }}"
+                    readonly
+                >
+
+                <label>Username</label>
+
+            </div>
+
+            <button type="submit" class="auth-btn">
+                Update Profile
+            </button>
 
         </form>
+
     </div>
+
 </section>
 
 {% endblock %}

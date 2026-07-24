@@ -3,28 +3,96 @@
 
 <section class="dashboard-section">
 
-<h2 class="dashboard-title">Edit Menu Item</h2>
+    <h2 class="dashboard-title">
+        Edit Menu Item
+    </h2>
 
-<form method="POST" action="/staff/update_menu/{{ item.id }}" class="menu-form">
+    <div class="admin-section">
 
-<input type="text" name="name" value="{{ item.name }}" required>
+        <form
+            method="POST"
+            action="{{ url_for('update_menu', id=item.id) }}"
+            enctype="multipart/form-data"
+            class="staff-menu-form">
 
-<input type="number" name="price" value="{{ item.price }}" required>
+            <!-- Item Name -->
+            <input
+                type="text"
+                name="name"
+                value="{{ item.name }}"
+                placeholder="Item Name"
+                required>
 
-<select name="category">
+            <!-- Price -->
+            <input
+                type="number"
+                name="price"
+                value="{{ item.price }}"
+                placeholder="Price"
+                min="1"
+                step="0.01"
+                required>
 
-<option {% if item.category == "Drinks" %}selected{% endif %}>Drinks</option>
-<option {% if item.category == "Breakfast" %}selected{% endif %}>Breakfast</option>
-<option {% if item.category == "Lunch" %}selected{% endif %}>Lunch</option>
-<option {% if item.category == "Snacks" %}selected{% endif %}>Snacks</option>
+            <!-- Category -->
+            <select
+                name="category"
+                required>
 
-</select>
+                <option value="Breakfast"
+                    {% if item.category=="Breakfast" %}selected{% endif %}>
+                    Breakfast
+                </option>
 
-<input type="text" name="image" value="{{ item.image }}" required>
+                <option value="Lunch"
+                    {% if item.category=="Lunch" %}selected{% endif %}>
+                    Lunch
+                </option>
 
-<button type="submit">Update Item</button>
+                <option value="Snacks"
+                    {% if item.category=="Snacks" %}selected{% endif %}>
+                    Snacks
+                </option>
 
-</form>
+                <option value="Drinks"
+                    {% if item.category=="Drinks" %}selected{% endif %}>
+                    Drinks
+                </option>
+
+            </select>
+
+            <!-- Current Image -->
+            <div style="width:100%; text-align:center; margin:10px 0;">
+
+                <p><strong>Current Image</strong></p>
+
+                <img
+                    src="{{ url_for('static', filename='images/' + (item.image if item.image else 'default.jpg')) }}"
+                    alt="{{ item.name }}"
+                    style="width:160px; height:120px; object-fit:cover; border-radius:10px;">
+
+            </div>
+
+            <!-- Upload New Image -->
+            <input
+                type="file"
+                name="image"
+                accept="image/*">
+
+            <small style="color:gray;">
+                Leave empty to keep the current image.
+            </small>
+
+            <button
+                type="submit"
+                class="auth-btn">
+
+                Update Menu Item
+
+            </button>
+
+        </form>
+
+    </div>
 
 </section>
 

@@ -3,111 +3,218 @@
 
 <section class="dashboard-section">
 
-<h2 class="dashboard-title">Manage Menu</h2>
+    <h2 class="dashboard-title">
+        Menu Management
+    </h2>
 
-<!-- ADD ITEM FORM -->
-<div class="admin-section">
+    <!-- =========================
+         ADD MENU ITEM
+    ========================== -->
 
-<form method="POST" action="/staff/add_menu" enctype="multipart/form-data" class="staff-menu-form">
+    <div class="admin-section">
 
-<input type="text" name="name" placeholder="Item name" required>
+        <form
+            method="POST"
+            action="{{ url_for('add_menu') }}"
+            enctype="multipart/form-data"
+            class="staff-menu-form">
 
-<input type="number" name="price" placeholder="Price" required>
+            <input
+                type="text"
+                name="name"
+                placeholder="Item Name"
+                required>
 
-<select name="category">
-<option>Drinks</option>
-<option>Breakfast</option>
-<option>Lunch</option>
-<option>Snacks</option>
-</select>
+            <input
+                type="number"
+                name="price"
+                placeholder="Price (₹)"
+                min="1"
+                step="0.01"
+                required>
 
-<input type="file" name="image" required>
+            <select
+                name="category"
+                required>
 
-<button type="submit" class="auth-btn">Add Item</button>
+                <option value="">Select Category</option>
+                <option value="Breakfast">Breakfast</option>
+                <option value="Lunch">Lunch</option>
+                <option value="Snacks">Snacks</option>
+                <option value="Drinks">Drinks</option>
 
-</form>
+            </select>
 
-</div>
+            <input
+                type="file"
+                name="image"
+                accept="image/*"
+                required>
 
-<!-- SEARCH -->
-<input type="text" id="searchInput" placeholder="Search item..." class="search-input">
+            <button
+                type="submit"
+                class="auth-btn">
 
-<br><br>
+                Add Menu Item
 
-<!-- MENU ITEMS -->
-<div class="menu-manage-container">
+            </button>
+
+        </form>
+
+    </div>
+
+    <!-- =========================
+         SEARCH
+    ========================== -->
+
+    <input
+        type="text"
+        id="searchInput"
+        class="search-input"
+        placeholder="Search menu items...">
+
+    <br><br>
+
+    <!-- =========================
+         MENU ITEMS
+    ========================== -->
+
     {% if menu_items|length == 0 %}
-    <p style="text-align:center; color:gray;">
-        No menu items added yet.
-    </p>
+
+        <div class="empty-message">
+
+            <h3>No Menu Items</h3>
+
+            <p>
+                Add your first menu item to get started.
+            </p>
+
+        </div>
+
+    {% else %}
+
+    <div class="menu-manage-container">
+
+        {% for item in menu_items %}
+
+        <div class="menu-manage-card">
+
+            <!-- Image -->
+
+            <img
+                src="{{ url_for('static', filename='images/' + (item.image if item.image else 'default.jpg')) }}"
+                alt="{{ item.name }}">
+
+            <!-- Details -->
+
+            <div class="menu-info">
+
+                <h3>{{ item.name }}</h3>
+
+                <p>
+
+                    ₹{{ item.price }}
+
+                    |
+
+                    {{ item.category }}
+
+                </p>
+
+                {% if item.available == 0 %}
+
+                    <span class="out-badge">
+
+                        Out of Stock
+
+                    </span>
+
+                {% endif %}
+
+            </div>
+
+            <!-- Actions -->
+
+            <div class="menu-actions">
+
+                <a
+                    href="{{ url_for('toggle_stock', id=item.id) }}"
+                    class="stock-btn"
+                    onclick="return confirm('Update stock status?')">
+
+                    {% if item.available == 1 %}
+
+                        Mark Out of Stock
+
+                    {% else %}
+
+                        Mark Available
+
+                    {% endif %}
+
+                </a>
+
+                <a
+                    href="{{ url_for('edit_menu', id=item.id) }}"
+                    class="edit-btn">
+
+                    Edit
+
+                </a>
+
+                <a
+                    href="{{ url_for('delete_menu', id=item.id) }}"
+                    class="delete-btn"
+                    onclick="return confirm('Are you sure you want to delete this menu item?')">
+
+                    Delete
+
+                </a>
+
+            </div>
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
     {% endif %}
-
-{% for item in menu_items %}
-
-<div class="menu-manage-card">
-
-    <!-- IMAGE -->
-    <img src="{{ url_for('static', filename='images/' + (item.image if item.image else 'default.jpg')) }}" alt="{{ item.name }}">
-
-    <!-- INFO -->
-    <div class="menu-info">
-        <h3>{{ item.name }}</h3>
-        <p><strong>₹{{ item.price }}</strong> | {{ item.category }}</p>
-
-        {% if item.available == 0 %}
-            <span class="out-badge">Out of Stock</span>
-        {% endif %}
-    </div>
-
-    <!-- ACTIONS -->
-    <div class="menu-actions">
-
-        <a href="/staff/toggle_stock/{{ item.id }}" class="stock-btn">
-            {% if item.available == 1 %}
-                Mark Out of Stock
-            {% else %}
-                Mark Available
-            {% endif %}
-        </a>
-
-        <a href="/staff/edit_menu/{{ item.id }}" class="edit-btn">Edit</a>
-
-        <a href="/staff/delete_menu/{{ item.id }}" 
-        class="delete-btn"
-        onclick="return confirm('Delete this item?')">
-            Delete
-        </a>
-
-    </div>
-
-</div>
-
-{% endfor %}
-
-</div>
 
 </section>
 
-<!-- SEARCH SCRIPT -->
-<script>
-document.getElementById("searchInput").addEventListener("keyup", function () {
+<!-- =========================
+     SEARCH SCRIPT
+========================= -->
 
-    let value = this.value.toLowerCase();
+<script>
+
+const searchInput = document.getElementById("searchInput");
+
+searchInput.addEventListener("keyup", function () {
+
+    const value = this.value.toLowerCase();
 
     document.querySelectorAll(".menu-manage-card").forEach(card => {
 
-        let name = card.querySelector("h3").innerText.toLowerCase();
-        let info = card.querySelector("p").innerText.toLowerCase();
+        const text = card.innerText.toLowerCase();
 
-        if (name.includes(value) || info.includes(value)) {
+        if (text.includes(value)) {
+
             card.style.display = "flex";
-        } else {
+
+        }
+
+        else {
+
             card.style.display = "none";
+
         }
 
     });
 
 });
+
 </script>
 
 {% endblock %}

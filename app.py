@@ -126,23 +126,17 @@ def init_db():
     ''')
 
     # Feedback table
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            message TEXT NOT NULL,
-            rating INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )
-    ''')
-
-    try:
-        cursor.execute(
-            "ALTER TABLE feedback ADD COLUMN admin_reply TEXT"
-        )
-    except sqlite3.OperationalError:
-        pass
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        message TEXT,
+        rating INTEGER NOT NULL,
+        admin_reply TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+    """)
 
     # Create admin if not exists
     admin = cursor.execute(
@@ -211,41 +205,82 @@ def cart():
 
 @app.route("/checkout")
 def checkout():
+
     if session.get("role") != "customer":
         return "Access Denied"
 
-    return render_template("checkout.html")
+    conn = get_db_connection()
+
+    user = conn.execute(
+        """
+        SELECT full_name, email, phone
+        FROM users
+        WHERE id = ?
+        """,
+        (session["user_id"],)
+    ).fetchone()
+
+    conn.close()
+
+    return render_template(
+        "checkout.html",
+        user=user
+    )
 
 
 @app.route("/forgot_password", methods=["GET", "POST"])
 def forgot_password():
+
     if request.method == "POST":
-        username = request.form["username"]
+
+        username = request.form["username"].strip()
         new_password = request.form["new_password"]
 
-        if not is_strong_password(new_password):
-            return "Weak password!"
+        # Validate password strength
+        valid, message = validate_password(new_password)
+
+        if not valid:
+            flash(message, "error")
+            return redirect(url_for("forgot_password"))
 
         conn = get_db_connection()
+
         user = conn.execute(
-            "SELECT * FROM users WHERE username=?",
+            """
+            SELECT *
+            FROM users
+            WHERE username = ?
+            """,
             (username,)
         ).fetchone()
 
         if not user:
             conn.close()
-            return "User not found!"
+            flash("Username not found.", "error")
+            return redirect(url_for("forgot_password"))
 
-        hashed = generate_password_hash(new_password)
+        # Prevent using the same password
+        if check_password_hash(user["password"], new_password):
+            conn.close()
+            flash("New password cannot be the same as the old password.", "error")
+            return redirect(url_for("forgot_password"))
+
+        hashed_password = generate_password_hash(new_password)
 
         conn.execute(
-            "UPDATE users SET password=? WHERE username=?",
-            (hashed, username)
+            """
+            UPDATE users
+            SET password = ?
+            WHERE username = ?
+            """,
+            (hashed_password, username)
         )
+
         conn.commit()
         conn.close()
 
-        return redirect("/login")
+        flash("Password reset successfully. Please login.", "success")
+        return redirect(url_for("login"))
 
     return render_template("forgot_password.html")
 
@@ -294,72 +329,138 @@ def reorder(order_id):
     conn = get_db_connection()
 
     items = conn.execute("""
-        SELECT order_items.item_name, order_items.price,
-               order_items.quantity, menu.image
+        SELECT
+            order_items.item_name,
+            order_items.price,
+            order_items.quantity,
+            menu.image,
+            menu.available
         FROM order_items
-        LEFT JOIN menu ON order_items.item_name = menu.name
-        WHERE order_id=?
+        LEFT JOIN menu
+            ON order_items.item_name = menu.name
+        WHERE order_items.order_id = ?
     """, (order_id,)).fetchall()
 
     conn.close()
 
     if not items:
-        return "No items found"
+        flash("No items found in this order.", "error")
+        return redirect(url_for("profile"))
 
-    reorder_cart = []
+    cart = []
+    unavailable_items = []
 
     for item in items:
-        reorder_cart.append({
+
+        # Skip unavailable items
+        # Item deleted or out of stock
+        if item["available"] != 1:
+            unavailable_items.append(item["item_name"])
+            continue
+
+        cart.append({
             "name": item["item_name"],
             "price": item["price"],
             "quantity": item["quantity"],
             "image": item["image"] if item["image"] else "default.jpg"
         })
 
-    session["reorder_cart"] = reorder_cart
-    return redirect("/cart")
+    # If every item is unavailable
+    if not cart:
+        flash(
+            "None of the items from your previous order are currently available.",
+            "error"
+        )
+        return redirect(url_for("profile"))
+
+    # Replace current cart with reordered items
+    session["reorder_cart"] = cart
+    session.modified = True
+
+    # Flash message
+    if unavailable_items:
+        flash(
+            f"{len(cart)} item(s) added to cart. "
+            f"The following item(s) are currently unavailable: "
+            f"{', '.join(unavailable_items)}",
+            "warning"
+        )
+    else:
+        flash(
+            "All items from your previous order have been added to the cart.",
+            "success"
+        )
+
+    return redirect(url_for("cart"))
 
 
 @app.route("/profile")
 def profile():
-    if session.get("role") != "customer":
-        return "Access Denied"
+
+    if "user_id" not in session:
+        return redirect(url_for("login"))
 
     conn = get_db_connection()
 
+    # ------------------------
+    # User Details
+    # ------------------------
     user = conn.execute("""
-        SELECT username, full_name, email, phone, role, created_at
+        SELECT
+            id,
+            username,
+            full_name,
+            phone,
+            role,
+            created_at
         FROM users
-        WHERE id=?
+        WHERE id = ?
     """, (session["user_id"],)).fetchone()
 
+    if not user:
+        conn.close()
+        return redirect(url_for("logout"))
+
+    # ------------------------
+    # Active Queue
+    # ------------------------
     active_orders = conn.execute("""
-        SELECT id FROM orders
-        WHERE status NOT IN ('Completed', 'Cancelled')
+        SELECT id
+        FROM orders
+        WHERE status IN ('Received', 'Preparing')
         ORDER BY id ASC
     """).fetchall()
 
-    active_order_ids = [order["id"] for order in active_orders]
+    queue = [row["id"] for row in active_orders]
 
+    # ------------------------
+    # User Orders
+    # ------------------------
     orders = conn.execute("""
-        SELECT * FROM orders
-        WHERE user_id=?
+        SELECT *
+        FROM orders
+        WHERE user_id = ?
         ORDER BY id DESC
     """, (session["user_id"],)).fetchall()
 
     orders_with_details = []
 
     for order in orders:
+
         items = conn.execute("""
-            SELECT * FROM order_items
-            WHERE order_id=?
+            SELECT *
+            FROM order_items
+            WHERE order_id = ?
         """, (order["id"],)).fetchall()
 
-        if order["id"] in active_order_ids:
-            position = active_order_ids.index(order["id"]) + 1
+        if order["id"] in queue:
+
+            position = queue.index(order["id"]) + 1
             orders_ahead = position - 1
             estimated_time = orders_ahead * 5
+
         else:
+
             position = "-"
             orders_ahead = "-"
             estimated_time = "-"
@@ -379,35 +480,41 @@ def profile():
 
     return render_template(
         "profile.html",
-        orders=orders_with_details,
-        user=user
+        user=user,
+        orders=orders_with_details
     )
 
 
 @app.route("/edit_profile", methods=["GET", "POST"])
 def edit_profile():
-    if not session.get("user_id"):
+
+    if "user_id" not in session:
         return redirect(url_for("login"))
 
     conn = get_db_connection()
 
     if request.method == "POST":
+
         name = request.form["name"].strip()
         phone = request.form["phone"].strip()
 
-        if not name:
-            flash("Name cannot be empty", "error")
+        # Validate Name
+        if len(name) < 3:
+            flash("Name must contain at least 3 characters.", "error")
             conn.close()
             return redirect(url_for("edit_profile"))
 
+        # Validate Phone Number
         if not phone.isdigit() or len(phone) != 10:
-            flash("Enter valid 10-digit phone number", "error")
+            flash("Please enter a valid 10-digit phone number.", "error")
             conn.close()
             return redirect(url_for("edit_profile"))
 
         conn.execute("""
             UPDATE users
-            SET full_name = ?, phone = ?
+            SET
+                full_name = ?,
+                phone = ?
             WHERE id = ?
         """, (name, phone, session["user_id"]))
 
@@ -417,19 +524,25 @@ def edit_profile():
         flash("Profile updated successfully!", "success")
         return redirect(url_for("profile"))
 
+    # ------------------------
+    # GET REQUEST
+    # ------------------------
+
     user = conn.execute("""
-        SELECT username, full_name, phone
+        SELECT
+            username,
+            full_name,
+            phone
         FROM users
         WHERE id = ?
     """, (session["user_id"],)).fetchone()
 
     conn.close()
 
-    user = dict(user)
-    user["full_name"] = user["full_name"] or ""
-    user["phone"] = user["phone"] or ""
-
-    return render_template("edit_profile.html", user=user)
+    return render_template(
+        "edit_profile.html",
+        user=user
+    )
 
 
 @app.route("/change_password", methods=["GET", "POST"])
@@ -442,64 +555,92 @@ def change_password():
         new_password = request.form["new_password"]
 
         conn = get_db_connection()
+
         user = conn.execute(
-            "SELECT * FROM users WHERE id=?",
+            """
+            SELECT *
+            FROM users
+            WHERE id=?
+            """,
             (session["user_id"],)
         ).fetchone()
+
+        if not user:
+            conn.close()
+            flash("User not found.", "error")
+            return redirect(url_for("login"))
 
         if not check_password_hash(user["password"], current_password):
             conn.close()
             flash("Current password is incorrect.", "error")
             return redirect(url_for("change_password"))
 
-        if not is_strong_password(new_password):
+        valid, message = validate_password(new_password)
+
+        if not valid:
             conn.close()
-            flash("New password is too weak.", "error")
+            flash(message, "error")
+            return redirect(url_for("change_password"))
+
+        if check_password_hash(user["password"], new_password):
+            conn.close()
+            flash("New password cannot be the same as the current password.", "error")
             return redirect(url_for("change_password"))
 
         hashed_password = generate_password_hash(new_password)
 
         conn.execute(
-            "UPDATE users SET password=? WHERE id=?",
+            """
+            UPDATE users
+            SET password=?
+            WHERE id=?
+            """,
             (hashed_password, session["user_id"])
         )
+
         conn.commit()
         conn.close()
 
         flash("Password changed successfully.", "success")
-        return redirect(url_for("home"))
+        return redirect(url_for("profile"))
 
     return render_template("change_password.html")
 
 
 @app.route("/place_order", methods=["POST"])
 def place_order():
-    if "user_id" not in session:
+
+    if session.get("role") != "customer":
         return redirect(url_for("login"))
 
-    cart_data = request.form["cartData"]
-    cart = json.loads(cart_data)
+    cart = json.loads(request.form["cartData"])
 
-    total_amount = sum(item["price"] * item["quantity"] for item in cart)
+    total_amount = sum(
+        item["price"] * item["quantity"]
+        for item in cart
+    )
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO orders (user_id, total_amount, status, created_at)
-        VALUES (?, ?, ?, ?)
-    """, (
-        session["user_id"],
-        total_amount,
-        "Received",
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    ))
+    INSERT INTO orders
+    (user_id, total_amount, status, created_at)
+    VALUES (?, ?, ?, ?)
+""", (
+    session["user_id"],
+    total_amount,
+    "Received",
+    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+))
 
     order_id = cursor.lastrowid
 
     for item in cart:
+
         cursor.execute("""
-            INSERT INTO order_items (order_id, item_name, price, quantity)
+            INSERT INTO order_items
+            (order_id, item_name, price, quantity)
             VALUES (?, ?, ?, ?)
         """, (
             order_id,
@@ -511,22 +652,27 @@ def place_order():
     conn.commit()
     conn.close()
 
-    return render_template("order_success.html", order_id=order_id)
-
+    return render_template(
+        "order_success.html",
+        order_id=order_id
+    )
 
 # -----------------------
-# STAFF ROUTES
+# STAFF DASHBOARD
 # -----------------------
 
 @app.route("/staff")
 def staff_dashboard():
+
     if session.get("role") != "staff":
-        return "Access Denied"
+        return redirect(url_for("login"))
 
     conn = get_db_connection()
 
+    # Get all orders
     orders = conn.execute("""
-        SELECT * FROM orders
+        SELECT *
+        FROM orders
         ORDER BY id DESC
     """).fetchall()
 
@@ -534,13 +680,37 @@ def staff_dashboard():
 
     now = datetime.now()
 
+    # Dashboard Statistics
+    total_orders = len(orders)
+    received = 0
+    preparing = 0
+    completed = 0
+
     for order in orders:
+
+        # Count order status
+        if order["status"] == "Received":
+            received += 1
+
+        elif order["status"] == "Preparing":
+            preparing += 1
+
+        elif order["status"] == "Completed":
+            completed += 1
+
+        # Get order items
         items = conn.execute("""
-            SELECT * FROM order_items
-            WHERE order_id=?
+            SELECT *
+            FROM order_items
+            WHERE order_id = ?
         """, (order["id"],)).fetchall()
 
-        order_time = datetime.strptime(order["created_at"], "%Y-%m-%d %H:%M:%S")
+        # Time Ago
+        order_time = datetime.strptime(
+            order["created_at"],
+            "%Y-%m-%d %H:%M:%S"
+        )
+
         diff = now - order_time
 
         minutes = int(diff.total_seconds() // 60)
@@ -548,140 +718,83 @@ def staff_dashboard():
 
         if minutes < 1:
             time_ago = "Just now"
+
         elif minutes < 60:
             time_ago = f"{minutes} min ago"
+
         elif hours < 24:
             time_ago = f"{hours} hr ago"
+
         else:
             days = hours // 24
-            time_ago = f"{days} day ago" if days == 1 else f"{days} days ago"
+            time_ago = (
+                f"{days} day ago"
+                if days == 1
+                else f"{days} days ago"
+            )
 
         orders_with_items.append({
+
             "id": order["id"],
             "status": order["status"],
             "created_at": order["created_at"],
             "time_ago": time_ago,
             "total_amount": order["total_amount"],
             "items": items
+
         })
 
     conn.close()
 
-    return render_template("staff_dashboard.html", orders=orders_with_items)
+    return render_template(
+
+        "staff_dashboard.html",
+
+        orders=orders_with_items,
+
+        total_orders=total_orders,
+        received=received,
+        preparing=preparing,
+        completed=completed
+
+    )
 
 
 @app.route("/staff/menu")
 def staff_menu():
+
     if session.get("role") != "staff":
-        return "Access Denied"
+        return redirect(url_for("login"))
 
     conn = get_db_connection()
 
     menu_items = conn.execute("""
-        SELECT * FROM menu
+        SELECT *
+        FROM menu
         ORDER BY id DESC
     """).fetchall()
 
     conn.close()
 
-    return render_template("staff_menu.html", menu_items=menu_items)
+    return render_template(
+        "staff_menu.html",
+        menu_items=menu_items
+    )
 
 
 @app.route("/staff/add_menu", methods=["POST"])
 def add_menu():
-    if session.get("role") != "staff":
-        return "Access Denied"
 
-    name = request.form["name"]
-    price = request.form["price"]
+    if session.get("role") != "staff":
+        return redirect(url_for("login"))
+
+    name = request.form["name"].strip()
+    price = float(request.form["price"])
     category = request.form["category"]
 
-    file = request.files.get("image")
-
-    if file:
-        filename = file.filename
-        file.save(os.path.join("static/images", filename))
-    else:
-        filename = "default.jpg"
-
-    conn = get_db_connection()
-
-    conn.execute("""
-        INSERT INTO menu (name, price, category, image)
-        VALUES (?, ?, ?, ?)
-    """, (name, price, category, filename))
-
-    conn.commit()
-    conn.close()
-
-    return redirect("/staff/menu")
-
-
-@app.route("/staff/toggle_stock/<int:id>")
-def toggle_stock(id):
-    if session.get("role") != "staff":
-        return "Access Denied"
-
-    conn = get_db_connection()
-
-    item = conn.execute(
-        "SELECT available FROM menu WHERE id=?", (id,)
-    ).fetchone()
-
-    new_status = 0 if item["available"] == 1 else 1
-
-    conn.execute(
-        "UPDATE menu SET available=? WHERE id=?",
-        (new_status, id)
-    )
-
-    conn.commit()
-    conn.close()
-
-    return redirect("/staff/menu")
-
-
-@app.route("/staff/delete_menu/<int:id>")
-def delete_menu(id):
-    if session.get("role") != "staff":
-        return "Access Denied"
-
-    conn = get_db_connection()
-    conn.execute("DELETE FROM menu WHERE id=?", (id,))
-    conn.commit()
-    conn.close()
-
-    return redirect("/staff/menu")
-
-
-@app.route("/staff/edit_menu/<int:id>")
-def edit_menu(id):
-    if session.get("role") != "staff":
-        return redirect("/")
-
-    conn = get_db_connection()
-    item = conn.execute("SELECT * FROM menu WHERE id=?", (id,)).fetchone()
-    conn.close()
-
-    return render_template("edit_menu.html", item=item)
-
-@app.route("/staff/update_menu/<int:id>", methods=["POST"])
-def update_menu(id):
-
-    if session.get("role") != "staff":
-        return "Access Denied"
-
-    name = request.form["name"]
-    price = request.form["price"]
-    category = request.form["category"]
-
-    conn = get_db_connection()
-
-    item = conn.execute("SELECT * FROM menu WHERE id=?", (id,)).fetchone()
-
-    if not item:
-        conn.close()
-        return "Item not found"
+    if price <= 0:
+        flash("Price must be greater than zero.", "error")
+        return redirect(url_for("staff_menu"))
 
     file = request.files.get("image")
 
@@ -689,58 +802,260 @@ def update_menu(id):
         filename = file.filename
         file.save(os.path.join("static/images", filename))
     else:
-        filename = item["image"]
+        filename = "default.jpg"
+
+    conn = get_db_connection()
+
+    existing = conn.execute("""
+        SELECT id
+        FROM menu
+        WHERE LOWER(name)=LOWER(?)
+    """, (name,)).fetchone()
+
+    if existing:
+        conn.close()
+        flash("Menu item already exists.", "warning")
+        return redirect(url_for("staff_menu"))
 
     conn.execute("""
-        UPDATE menu
-        SET name=?, price=?, category=?, image=?
-        WHERE id=?
-    """, (name, price, category, filename, id))
+        INSERT INTO menu
+        (
+            name,
+            price,
+            category,
+            image
+        )
+        VALUES (?, ?, ?, ?)
+    """, (
+        name,
+        price,
+        category,
+        filename
+    ))
 
     conn.commit()
     conn.close()
 
-    return redirect("/staff/menu")
+    flash("Menu item added successfully.", "success")
+
+    return redirect(url_for("staff_menu"))
+
+
+@app.route("/staff/toggle_stock/<int:id>")
+def toggle_stock(id):
+
+    if session.get("role") != "staff":
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+
+    item = conn.execute("""
+        SELECT available
+        FROM menu
+        WHERE id=?
+    """, (id,)).fetchone()
+
+    if not item:
+        conn.close()
+        flash("Menu item not found.", "error")
+        return redirect(url_for("staff_menu"))
+
+    new_status = 0 if item["available"] else 1
+
+    conn.execute("""
+        UPDATE menu
+        SET available=?
+        WHERE id=?
+    """, (
+        new_status,
+        id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    flash("Stock status updated successfully.", "success")
+
+    return redirect(url_for("staff_menu"))
+
+
+@app.route("/staff/delete_menu/<int:id>")
+def delete_menu(id):
+
+    if session.get("role") != "staff":
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+
+    item = conn.execute("""
+        SELECT id
+        FROM menu
+        WHERE id=?
+    """, (id,)).fetchone()
+
+    if not item:
+        conn.close()
+        flash("Menu item not found.", "error")
+        return redirect(url_for("staff_menu"))
+
+    conn.execute("""
+        DELETE FROM menu
+        WHERE id=?
+    """, (id,))
+
+    conn.commit()
+    conn.close()
+
+    flash("Menu item deleted successfully.", "success")
+
+    return redirect(url_for("staff_menu"))
+
+
+@app.route("/staff/edit_menu/<int:id>")
+def edit_menu(id):
+
+    if session.get("role") != "staff":
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+
+    item = conn.execute("""
+        SELECT *
+        FROM menu
+        WHERE id=?
+    """, (id,)).fetchone()
+
+    conn.close()
+
+    if not item:
+        flash("Menu item not found.", "error")
+        return redirect(url_for("staff_menu"))
+
+    return render_template(
+        "edit_menu.html",
+        item=item
+    )
+
+@app.route("/staff/update_menu/<int:id>", methods=["POST"])
+def update_menu(id):
+
+    if session.get("role") != "staff":
+        return redirect(url_for("login"))
+
+    name = request.form["name"].strip()
+    price = float(request.form["price"])
+    category = request.form["category"]
+
+    if price <= 0:
+        flash("Price must be greater than zero.", "error")
+        return redirect(url_for("edit_menu", id=id))
+
+    conn = get_db_connection()
+
+    item = conn.execute("""
+        SELECT *
+        FROM menu
+        WHERE id=?
+    """, (id,)).fetchone()
+
+    if not item:
+        conn.close()
+        flash("Menu item not found.", "error")
+        return redirect(url_for("staff_menu"))
+
+    file = request.files.get("image")
+
+    if file and file.filename:
+
+        filename = file.filename
+        file.save(os.path.join("static/images", filename))
+
+    else:
+
+        filename = item["image"]
+
+    conn.execute("""
+        UPDATE menu
+        SET
+            name=?,
+            price=?,
+            category=?,
+            image=?
+        WHERE id=?
+    """, (
+        name,
+        price,
+        category,
+        filename,
+        id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    flash("Menu item updated successfully.", "success")
+
+    return redirect(url_for("staff_menu"))
 
 @app.route("/update_order/<int:order_id>", methods=["POST"])
 def update_order(order_id):
+
     if session.get("role") != "staff":
-        return "Access Denied"
+        return redirect(url_for("login"))
 
     new_status = request.form["status"]
 
     allowed_flow = {
+
         "Received": ["Preparing"],
+
         "Preparing": ["Completed"],
+
         "Completed": [],
+
         "Cancelled": []
+
     }
 
     conn = get_db_connection()
 
     order = conn.execute("""
-        SELECT status FROM orders
+        SELECT status
+        FROM orders
         WHERE id=?
     """, (order_id,)).fetchone()
 
     if not order:
+
         conn.close()
-        return "Order not found"
+
+        flash("Order not found.", "error")
+
+        return redirect(url_for("staff_dashboard"))
 
     current_status = order["status"]
 
     if new_status not in allowed_flow.get(current_status, []):
+
         conn.close()
-        return "Invalid status update"
+
+        flash("Invalid order status update.", "error")
+
+        return redirect(url_for("staff_dashboard"))
 
     conn.execute("""
         UPDATE orders
         SET status=?
         WHERE id=?
-    """, (new_status, order_id))
+    """, (
+        new_status,
+        order_id
+    ))
 
     conn.commit()
     conn.close()
+
+    flash("Order status updated successfully.", "success")
 
     return redirect(url_for("staff_dashboard"))
 
@@ -751,42 +1066,128 @@ def update_order(order_id):
 
 @app.route("/feedback", methods=["GET", "POST"])
 def feedback():
+
     conn = get_db_connection()
     cur = conn.cursor()
 
+    # -----------------------
+    # SUBMIT FEEDBACK
+    # -----------------------
     if request.method == "POST":
-        message = request.form["message"]
-        rating = request.form["rating"]
-        user_id = session["user_id"]
 
+        if "user_id" not in session:
+            flash("Please login to submit feedback.", "error")
+            conn.close()
+            return redirect(url_for("login"))
+
+        user_id = session["user_id"]
+        message = request.form.get("message", "").strip()
+        rating = request.form["rating"]
+
+        # Allow only one feedback per customer
+        existing = cur.execute(
+            """
+            SELECT id
+            FROM feedback
+            WHERE user_id = ?
+            """,
+            (user_id,)
+        ).fetchone()
+
+        if existing:
+            flash("You have already submitted feedback.", "warning")
+            conn.close()
+            return redirect(url_for("feedback"))
+
+        print("Session user_id:", session.get("user_id"))
+
+        user = cur.execute(
+        "SELECT * FROM users WHERE id=?",
+        (session.get("user_id"),)
+        ).fetchone()
+
+        print("User exists:", user)
+        
         cur.execute(
-            "INSERT INTO feedback(user_id,message,rating) VALUES(?,?,?)",
-            (user_id, message, rating)
+            """
+            INSERT INTO feedback (
+                user_id,
+                message,
+                rating
+            )
+            VALUES (?, ?, ?)
+            """,
+            (
+                user_id,
+                message if message else "",
+                rating
+            )
         )
 
         conn.commit()
-        return redirect("/feedback")
 
-    cur.execute("""
-        SELECT users.username, feedback.message, feedback.rating,
-               feedback.created_at, feedback.admin_reply
+        flash(
+            "Thank you for your feedback!",
+            "success"
+        )
+
+        conn.close()
+
+        return redirect(url_for("feedback"))
+
+    # -----------------------
+    # LOAD ALL FEEDBACK
+    # -----------------------
+
+    cur.execute(
+        """
+        SELECT
+            feedback.id,
+            feedback.message,
+            feedback.rating,
+            feedback.created_at,
+            feedback.admin_reply,
+            users.username
         FROM feedback
-        JOIN users ON users.id = feedback.user_id
+        JOIN users
+            ON users.id = feedback.user_id
         ORDER BY feedback.created_at DESC
-    """)
+        """
+    )
 
     feedbacks = cur.fetchall()
 
-    cur.execute("SELECT AVG(rating) FROM feedback")
-    avg_rating = cur.fetchone()[0]
+    # -----------------------
+    # REVIEW STATISTICS
+    # -----------------------
 
-    cur.execute("SELECT COUNT(*) FROM feedback")
+    cur.execute(
+        "SELECT AVG(rating) FROM feedback"
+    )
+
+    avg = cur.fetchone()[0]
+
+    avg_rating = round(avg, 1) if avg else 0
+
+    cur.execute(
+        "SELECT COUNT(*) FROM feedback"
+    )
+
     total_reviews = cur.fetchone()[0]
 
     rating_counts = {}
 
     for i in range(1, 6):
-        cur.execute("SELECT COUNT(*) FROM feedback WHERE rating=?", (i,))
+
+        cur.execute(
+            """
+            SELECT COUNT(*)
+            FROM feedback
+            WHERE rating = ?
+            """,
+            (i,)
+        )
+
         rating_counts[i] = cur.fetchone()[0]
 
     conn.close()
@@ -794,11 +1195,10 @@ def feedback():
     return render_template(
         "feedback.html",
         feedbacks=feedbacks,
-        avg_rating=round(avg_rating, 1) if avg_rating else 0,
+        avg_rating=avg_rating,
         total_reviews=total_reviews,
         rating_counts=rating_counts
     )
-
 
 # -----------------------
 # ADMIN ROUTES
@@ -943,30 +1343,44 @@ def admin_dashboard():
 
 @app.route("/admin/feedback")
 def view_feedback():
+
     if session.get("role") != "admin":
         return redirect(url_for("login"))
 
     conn = get_db_connection()
 
     feedbacks = conn.execute("""
-        SELECT feedback.id,
-               feedback.message,
-               feedback.rating,
-               feedback.created_at,
-               feedback.admin_reply,
-               users.username
+
+        SELECT
+
+            feedback.id,
+            feedback.message,
+            feedback.rating,
+            feedback.created_at,
+            feedback.admin_reply,
+            users.username
+
         FROM feedback
-        JOIN users ON feedback.user_id = users.id
+
+        JOIN users
+
+            ON users.id = feedback.user_id
+
         ORDER BY feedback.created_at DESC
+
     """).fetchall()
 
     conn.close()
 
-    return render_template("admin_feedback.html", feedbacks=feedbacks)
+    return render_template(
+        "admin_feedback.html",
+        feedbacks=feedbacks
+    )
 
 
-@app.route("/admin/delete_feedback/<int:id>")
+@app.route("/admin/delete_feedback/<int:id>", methods=["POST"])
 def delete_feedback(id):
+
     if session.get("role") != "admin":
         return redirect(url_for("login"))
 
@@ -980,17 +1394,25 @@ def delete_feedback(id):
     conn.commit()
     conn.close()
 
-    return redirect("/admin/feedback")
+    flash("Feedback deleted successfully.", "success")
+
+    return redirect(url_for("view_feedback"))
 
 
 @app.route("/admin/reply_feedback/<int:id>", methods=["POST"])
 def reply_feedback(id):
+
     if session.get("role") != "admin":
         return redirect(url_for("login"))
 
-    reply = request.form["reply"]
+    reply = request.form["reply"].strip()
+
+    if reply == "":
+        flash("Reply cannot be empty.", "error")
+        return redirect(url_for("view_feedback"))
 
     conn = get_db_connection()
+
     conn.execute("""
         UPDATE feedback
         SET admin_reply = ?
@@ -1000,7 +1422,9 @@ def reply_feedback(id):
     conn.commit()
     conn.close()
 
-    return redirect("/admin/feedback")
+    flash("Reply saved successfully.", "success")
+
+    return redirect(url_for("view_feedback"))
 
 
 @app.route("/admin/sales")

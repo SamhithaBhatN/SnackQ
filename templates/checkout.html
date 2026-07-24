@@ -2,77 +2,224 @@
 {% block content %}
 
 <section class="cart-section">
+
     <h2 class="cart-title">Checkout</h2>
 
     <div class="cart-container">
 
+        <!-- Left Side -->
         <div class="cart-items" id="checkoutItems"></div>
 
+        <!-- Right Side -->
         <div class="cart-summary">
-    <h3>Payment Method</h3>
 
-    <form method="POST" action="/place_order" onsubmit="return submitOrder()">
+            <h3>Customer Details</h3>
 
-        <div class="summary-row">
-            <input type="radio" name="payment" value="Cash" checked> Cash on Pickup
+            <div class="summary-row">
+                <span>Name</span>
+                <span>{{ user.full_name or session.get("user") }}</span>
+            </div>
+
+            <div class="summary-row">
+                <span>Email</span>
+                <span>{{ user.email or "-" }}</span>
+            </div>
+
+            <div class="summary-row">
+                <span>Phone</span>
+                <span>{{ user.phone or "-" }}</span>
+            </div>
+
+            <hr>
+
+            <h3>Payment Method</h3>
+
+            <form method="POST"
+                  action="/place_order"
+                  onsubmit="return submitOrder()">
+
+                <div class="summary-row payment-option">
+
+                    <label>
+                        <input
+                            type="radio"
+                            name="payment"
+                            value="Cash"
+                            checked>
+
+                        💵Cash on Pickup
+                    </label>
+
+                </div>
+
+                <input
+                    type="hidden"
+                    name="cartData"
+                    id="cartData">
+
+                <div class="summary-row">
+                    <span>Items</span>
+                    <span id="checkoutItemsCount">0</span>
+                </div>
+
+                <div class="summary-row">
+                    <span>Subtotal</span>
+                    <span id="checkoutSubtotal">₹0</span>
+                </div>
+
+                <hr>
+
+                <div class="summary-row total">
+                    <span>Total</span>
+                    <span id="checkoutTotal">₹0</span>
+                </div>
+
+                <a href="/cart" class="back-cart-btn">
+                ← Back to Cart
+                </a>
+
+                <button
+                    type="submit"
+                    class="checkout-btn">
+
+                    Place Order
+
+                </button>
+
+            </form>
+
         </div>
-
-        <input type="hidden" name="cartData" id="cartData">
-
-        <div class="summary-row total">
-            <span>Total</span>
-            <span id="checkoutTotal">₹0</span>
-        </div>
-
-        <button type="submit" class="checkout-btn">
-            Place Order
-        </button>
-    </form>
-</div>
 
     </div>
+
 </section>
 
 <script>
 
+const currentUserId = {{ session.get("user_id")|tojson }};
+
+const cartKey = currentUserId
+    ? `cart_${currentUserId}`
+    : "cart_guest";
+
+
+// =========================
+// LOAD CHECKOUT
+// =========================
+
 function loadCheckout() {
-    let cart = JSON.parse(localStorage.getItem("cart")) || [];
-    const container = document.getElementById("checkoutItems");
+
+    const cart = JSON.parse(
+        localStorage.getItem(cartKey)
+    ) || [];
+
+    const container =
+        document.getElementById("checkoutItems");
+
     container.innerHTML = "";
 
     let total = 0;
+    let totalItems = 0;
 
-    cart.forEach(item => {
-        total += item.price * item.quantity;
-
-        container.innerHTML += `
-        <div class="cart-item">
-            <img src="/static/images/${item.image}">
-            <div class="item-details">
-                <h3>${item.name}</h3>
-                <p>₹${item.price} × ${item.quantity}</p>
-            </div>
-            <div class="item-total">₹${item.price * item.quantity}</div>
+    if (cart.length === 0) {
+        document.querySelector(".checkout-btn").disabled = true;
+        container.innerHTML = `
+        <div class="empty-cart-box">
+        <h2>🛒</h2>
+        <h3>Your cart is empty</h3>
+        <p>Add some delicious food from the menu.</p>
+        <a href="/menu" class="checkout-btn"> Browse Menu </a>
         </div>
         `;
+
+        document.getElementById("checkoutTotal")
+            .innerText = "₹0";
+
+        return;
+    }
+    document.querySelector(".checkout-btn").disabled = false;
+    
+    cart.forEach(item => {
+
+        total += item.price * item.quantity;
+        totalItems += item.quantity;
+
+        container.innerHTML += `
+
+        <div class="cart-item">
+
+            <img
+                src="/static/images/${item.image || "default.jpg"}"
+                class="cart-img"
+            >
+
+            <div class="item-details">
+
+                <h3>${item.name}</h3>
+
+                <p>
+                ₹${item.price}
+                ×
+                ${item.quantity}
+                =
+                ₹${item.price * item.quantity}
+                </p>
+
+            </div>
+
+            <div class="item-total">
+
+                ₹${item.price * item.quantity}
+
+            </div>
+
+        </div>
+
+        `;
+
     });
 
+    document.getElementById("checkoutItemsCount").innerText = totalItems;
+    document.getElementById("checkoutSubtotal").innerText = "₹" + total;
     document.getElementById("checkoutTotal").innerText = "₹" + total;
+
 }
+
+
+// =========================
+// SUBMIT ORDER
+// =========================
 
 function submitOrder() {
-    let cart = localStorage.getItem("cart");
 
-    if (!cart || JSON.parse(cart).length === 0) {
-        alert("Cart is empty!");
+    const cart = JSON.parse(
+        localStorage.getItem(cartKey)
+    ) || [];
+
+    if (cart.length === 0) {
+
+        alert("Your cart is empty!");
+
         return false;
+
     }
 
-    document.getElementById("cartData").value = cart;
+    document.getElementById("cartData").value =
+        JSON.stringify(cart);
+
     return true;
+
 }
 
-window.onload = loadCheckout;
+
+// =========================
+// INITIALIZE
+// =========================
+
+document.addEventListener(
+    "DOMContentLoaded",
+    loadCheckout
+);
 
 </script>
 

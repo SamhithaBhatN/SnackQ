@@ -16,7 +16,19 @@
 </section>
 
 <script>
-localStorage.removeItem("cart");
+
+const currentUserId = {{ session.get("user_id")|tojson }};
+
+const cartKey = currentUserId
+    ? `cart_${currentUserId}`
+    : "cart_guest";
+
+localStorage.removeItem(cartKey);
+
+if (typeof updateCartBadge === "function") {
+    updateCartBadge();
+}
+
 </script>
 
 {% endblock %}
